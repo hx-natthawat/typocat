@@ -14,6 +14,7 @@ Requires macOS 13 or later and Xcode command-line tools.
 open build/TypoCat.app       # grant Accessibility access when asked
 swift run TypoCat --selftest # detector checks against this Mac's real layouts
 swift run TypoCat --eval 5000 # per-language fix rate, using every layout installed on this Mac
+swift run TypoCat --eval-typos 5000 # typo correction: fix rate, wrong fixes, false changes
 ```
 
 Enable the layouts you type with in System Settings → Keyboard → Input Sources.
@@ -70,9 +71,33 @@ System Settings → Privacy & Security → Accessibility and add it again.
 - **Menu options:**
   - **Disable in \<App\>:** turns TypoCat off for the front app.
   - **Match layout to each app:** switching to an app selects the language you usually type there. This starts after 20 words and needs a 75% majority.
+  - **Fix typos (beta):** off by default. See below.
   - **Open at login.**
 - **Never converted:** tech names (`git`, `api`, `json`…). In terminals and code editors, shell commands are not converted either.
 - **Field check:** before rewriting, TypoCat reads the focused field through the Accessibility API and checks that it ends with the typed word. If it doesn't (autocomplete, a moved cursor), the fix is skipped. Apps that don't expose their text fall back to the keystroke buffer.
+
+## Typo correction (beta)
+
+With "Fix typos" on, a lowercase word of four or more letters that isn't in
+the word list is replaced by the most common word one edit away (a missing,
+extra, swapped or wrong letter). It only happens when that word is at least
+10× as common as the next candidate and macOS's spell checker flags the typo
+and suggests the same word first. Never in terminals or code editors, never
+for capitalized words, and never for Thai and other scripts without spaces.
+Undo works the same way as for layout fixes.
+
+Measured with `--eval-typos 5000` (one random edit in each common word; "rare
+correct words" are real words ranked 40001+ that a list cut at 40000 doesn't know):
+
+| Language | Typos fixed | Fixed to the wrong word | Rare correct words changed |
+|---|---|---|---|
+| English | 19.8% | 2.0% | 1.9% |
+| Russian | 18.4% | 0.2% | 0.5% |
+
+Other languages stay off: on the test Mac, macOS lists Ukrainian, Bulgarian,
+Greek, Hebrew and Arabic spelling but flags nothing, and has no Serbian,
+Macedonian, Persian or Georgian dictionary. Many "rare words" it still changes
+are subtitle noise (`havea`, `nello`), so the real false-change rate is lower.
 
 ## How it works
 

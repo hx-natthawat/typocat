@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var excludeItem = NSMenuItem(title: "", action: #selector(toggleExcludeFrontApp), keyEquivalent: "")
     private var matchLayoutItem = NSMenuItem(title: "Match layout to each app", action: #selector(toggleMatchLayout),
                                              keyEquivalent: "")
+    private var typoItem = NSMenuItem(title: "Fix typos (beta)", action: #selector(toggleFixTypos), keyEquivalent: "")
     private var loginItem = NSMenuItem(title: "Open at login", action: #selector(toggleOpenAtLogin), keyEquivalent: "")
     /// The last app that wasn't us; opening our menu doesn't change it.
     private var frontApp: NSRunningApplication?
@@ -69,10 +70,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         matchLayoutItem.target = self
         matchLayoutItem.state = store.matchLayoutPerApp ? .on : .off
         loginItem.target = self
+        typoItem.target = self
+        typoItem.state = store.fixTypos ? .on : .off
         loginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
         menu.addItem(enabledItem)
         menu.addItem(excludeItem)
         menu.addItem(matchLayoutItem)
+        menu.addItem(typoItem)
         menu.addItem(loginItem)
         menu.addItem(permissionItem)
         menu.addItem(.separator())
@@ -115,6 +119,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func toggleMatchLayout() {
         store.matchLayoutPerApp.toggle()
         matchLayoutItem.state = store.matchLayoutPerApp ? .on : .off
+    }
+
+    @objc private func toggleFixTypos() {
+        store.fixTypos.toggle()
+        typoItem.state = store.fixTypos ? .on : .off
     }
 
     @objc private func toggleOpenAtLogin() {

@@ -122,6 +122,11 @@ final class Interceptor {
                                                 category: category),
                   let delimiter = event.copy() else {
                 lastCorrection = nil
+                if let typoFix = typoCorrection(typed, language: current), let delimiter = event.copy() {
+                    recentWords.removeAll()
+                    DispatchQueue.main.async { self.apply(typoFix, delimiter: delimiter, word: typed) }
+                    return nil
+                }
                 if keyCode == Key.space && !strokes.isEmpty {
                     recentWords.append((strokes, typed, current))
                     if recentWords.count > 3 { recentWords.removeFirst() }
@@ -172,6 +177,14 @@ final class Interceptor {
             self.inputSources.select(correction.to)
             self.onCorrection?(correction)
         }
+    }
+
+    /// A same-language spelling fix, when enabled and macOS agrees with it.
+    private func typoCorrection(_ typed: String, language: Language) -> Correction? {
+        guard store.fixTypos,
+              let fix = detector.typoFix(typed, in: language, ignoring: store.ignoredWords, category: category),
+              SystemSpelling.agrees(typo: typed, fix: fix, in: language) else { return nil }
+        return Correction(original: typed, replacement: fix, from: language, to: language)
     }
 
     /// Folds immediately preceding words that read better in the fix's language into one rewrite.

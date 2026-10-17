@@ -122,6 +122,63 @@ enum SelfTest {
         }
     }
 
+    /// Measures typo correction per language. Fix rate: one random edit in each of the top
+    /// `n` words. False changes: correct words the list doesn't know, taken as ranks 40001+
+    /// against a list cut at 40000, before and after the system spell checker's veto.
+    static func evaluateTypos(top n: Int) {
+        var seed: UInt64 = 0x5459_5043
+        func random(_ bound: Int) -> Int {
+            seed = seed &* 6364136223846793005 &+ 1442695040888963407
+            return Int((seed >> 33) % UInt64(bound))
+        }
+        print("lang | typo fixed: ours → with macOS agreeing | fixed to the wrong word | rare correct words changed | macOS speller")
+        let only = ProcessInfo.processInfo.environment["LS_LANGS"].map { Set($0.split(separator: ",").map(String.init)) }
+        for language in Language.bundled where !language.writesWithoutSpaces && (only?.contains(language.rawValue) ?? true) {
+            guard let url = Dictionaries.url(for: language), let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
+            let lines = text.split(separator: "\n")
+            guard lines.count >= 45000 else { continue }
+            var contents = lines.prefix(40000).joined(separator: "\n")
+            if language.rawValue == "sr" { contents = SerbianScript.addingCyrillic(to: contents) }
+            let dict = FrequencyDictionary(contents: contents)
+            let detector = Detector(dictionaries: [language: dict])
+            let words = lines.prefix(n).compactMap { $0.split(separator: " ").first.map(String.init) }
+                .map { language.rawValue == "sr" ? (SerbianScript.cyrillic($0) ?? $0) : $0 }
+                .filter { $0.count >= 4 && $0.allSatisfy(\.isLetter) && $0 == $0.lowercased() }
+            var tried = 0, fixed = 0, wrong = 0, fixedAgreed = 0, wrongAgreed = 0
+            for word in words {
+                var chars = Array(word)
+                let i = random(chars.count)
+                switch random(4) {
+                case 0: chars.remove(at: i)
+                case 1: if i + 1 < chars.count { chars.swapAt(i, i + 1) } else { chars.swapAt(i - 1, i) }
+                case 2: chars[i] = dict.alphabet[random(min(30, dict.alphabet.count))]
+                default: chars.insert(dict.alphabet[random(min(30, dict.alphabet.count))], at: i)
+                }
+                let typo = String(chars)
+                guard typo != word, dict.count(of: typo) == 0 else { continue } // real-word errors can't be caught
+                tried += 1
+                if let fix = detector.typoFix(typo, in: language) {
+                    let agreed = SystemSpelling.agrees(typo: typo, fix: fix, in: language)
+                    if fix == word { fixed += 1; if agreed { fixedAgreed += 1 } } else { wrong += 1; if agreed { wrongAgreed += 1 } }
+                }
+            }
+            let rare = lines.dropFirst(40000).prefix(5000).compactMap { $0.split(separator: " ").first.map(String.init) }
+                .map { language.rawValue == "sr" ? (SerbianScript.cyrillic($0) ?? $0) : $0 }
+                .filter { $0.count >= 4 && $0.allSatisfy(\.isLetter) && $0 == $0.lowercased() && dict.count(of: $0) == 0 }
+            let changed = rare.filter { detector.typoFix($0, in: language) != nil }
+            let hasChecker = SystemSpelling.isKnown("a", in: language) != nil
+            let vetoed = changed.filter { SystemSpelling.agrees(typo: $0, fix: detector.typoFix($0, in: language)!, in: language) }
+            let percent = { (part: Int, whole: Int) -> Double in 100 * Double(part) / Double(max(1, whole)) }
+            let after = vetoed.count // the app applies only fixes macOS agrees with
+            let checker = hasChecker ? "yes" : "none (fixes stay off)"
+            print(String(format: "%@   | %5.1f%% → %5.1f%% | %5.1f%% → %5.1f%% | %5.1f%% → %5.1f%% of %d   | %@",
+                         language.rawValue, percent(fixed, tried), percent(fixedAgreed, tried), percent(wrong, tried),
+                         percent(wrongAgreed, tried), percent(changed.count, rare.count), percent(after, rare.count),
+                         rare.count, checker))
+            if language == .english { print("     still changed:", vetoed.prefix(12).map { "\($0)→\(detector.typoFix($0, in: language)!)" }.joined(separator: " ")) }
+        }
+    }
+
     private static func measure(_ words: [String], intended: LayoutMap, wrong: LayoutMap, detector: Detector,
                                 layouts: [Language: LayoutMap]) -> (words: Int, rate: Double, changed: Int, misses: [String]) {
         var total = 0, fixed = 0, changed = 0

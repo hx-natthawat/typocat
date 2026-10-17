@@ -8,6 +8,8 @@ public final class FrequencyDictionary: @unchecked Sendable {
     private let ranks: [String: Int]
     /// Longest entry measured in Unicode scalars, bounds the segmentation search.
     public let maxScalarLength: Int
+    /// Letters seen in the list, most frequent first; candidate edits draw from these.
+    public let alphabet: [Character]
 
     /// - Parameter splitCompounds: for lists built from unsegmented text (Thai subtitles hold
     ///   entries like "คุณมาทำอะไรที่นี่"), also credit each entry's count to the words it splits into,
@@ -24,6 +26,12 @@ public final class FrequencyDictionary: @unchecked Sendable {
             maxLen = max(maxLen, word.unicodeScalars.count)
         }
         if splitCompounds { counts = Self.creditingParts(of: counts, maxLength: min(maxLen, 24)) }
+        var letterCounts: [Character: Int] = [:]
+        for (word, n) in counts { for ch in word where ch.isLetter { letterCounts[ch, default: 0] += n } }
+        // Drop stray letters from other scripts (names, loanwords) that would only add noise.
+        let total = letterCounts.values.reduce(0, +)
+        self.alphabet = letterCounts.filter { Double($0.value) / Double(max(1, total)) > 0.0005 }
+            .sorted { $0.value > $1.value }.map(\.key)
         self.counts = counts
         var ranks: [String: Int] = [:]
         for (i, word) in counts.keys.sorted(by: { counts[$0]! > counts[$1]! }).enumerated() { ranks[word] = i + 1 }

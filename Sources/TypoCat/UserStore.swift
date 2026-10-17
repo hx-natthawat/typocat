@@ -15,6 +15,12 @@ final class UserStore {
     private(set) var excludedApps: Set<String>
     private(set) var appLanguages = AppLanguageProfile()
 
+    /// Off by default: a wrong autocorrection costs more than a missed one.
+    var fixTypos: Bool {
+        get { defaults.bool(forKey: "fixTypos") }
+        set { defaults.set(newValue, forKey: "fixTypos") }
+    }
+
     var matchLayoutPerApp: Bool {
         get { defaults.object(forKey: matchLayoutKey) as? Bool ?? true }
         set { defaults.set(newValue, forKey: matchLayoutKey) }
