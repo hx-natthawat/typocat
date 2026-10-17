@@ -43,6 +43,9 @@ public final class Detector: @unchecked Sendable {
     /// recovers few words and changes ~3% of correct short Thai words. Languages written with
     /// spaces rarely leave short words behind, so only spaceless scripts get rereading.
     public var rereadsInto: @Sendable (Language) -> Bool = { $0.writesWithoutSpaces }
+    /// Any language takes back a one-key word left alone before a fix ("ณ love" → "I love")
+    /// when that letter is a word this common in it: about the top 10 words.
+    public var singleKeyRereadScore = 0.95
 
     public init(dictionaries: [Language: FrequencyDictionary]) {
         self.dictionaries = dictionaries
@@ -98,9 +101,11 @@ public final class Detector: @unchecked Sendable {
     public func reread(strokes: [KeyStroke], typed: String, current: Language, as target: Language,
                        layouts: [Language: LayoutMap], ignoring ignored: Set<String> = [],
                        category: AppCategory = .general) -> String? {
-        guard target != current, rereadsInto(target), !ignored.contains(typed), !ProtectedWords.contains(typed, in: category),
+        guard target != current, rereadsInto(target) || strokes.count == 1, !ignored.contains(typed),
+              !ProtectedWords.contains(typed, in: category),
               let alt = layouts[target]?.render(strokes), alt != typed else { return nil }
         let altScore = score(alt, as: target), typedScore = score(typed, as: current)
+        if !rereadsInto(target), altScore < singleKeyRereadScore { return nil }
         // Common words (นา, ทำ, go) stay: mixed-language text is normal. Rare ones (fu, z) may go.
         guard typedScore < rereadKeepScore else { return nil }
         return altScore >= acceptThreshold && altScore > typedScore ? alt : nil

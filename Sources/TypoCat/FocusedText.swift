@@ -22,7 +22,14 @@ enum FocusedText {
 
     static func check(endsWith word: String) -> Check {
         guard let prefix = textBeforeCaret() else { return .unreadable }
-        return prefix.hasSuffix(word) ? .matches : .mismatch
+        return endsWith(prefix, word) ? .matches : .mismatch
+    }
+
+    /// Compares Unicode scalars, not Characters: gibberish such as "้ำสสน" typed after a space
+    /// starts with a tone mark that joins the space into one Character, so String.hasSuffix fails.
+    static func endsWith(_ text: String, _ word: String, ignoringLast trailing: Int = 0) -> Bool {
+        let scalars = Array(text.unicodeScalars.dropLast(trailing))
+        return scalars.count >= word.unicodeScalars.count && scalars.suffix(word.unicodeScalars.count).elementsEqual(word.unicodeScalars)
     }
 
     /// Text from the start of the field up to the caret, or nil when the

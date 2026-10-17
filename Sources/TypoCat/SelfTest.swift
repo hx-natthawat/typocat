@@ -102,6 +102,15 @@ enum SelfTest {
                          a.rate, a.words, b.rate, b.words, changed))
             if !a.misses.isEmpty { print("      missed:", a.misses.joined(separator: " ")) }
 
+            // One-key words left before a fix to English: those that would be taken back.
+            let singles = Set(other.inverse().values.filter { $0.count == 1 }.compactMap { strokes -> String? in
+                let st = strokes[0]
+                guard let typed = other.render([st]),
+                      let alt = detector.reread(strokes: [st], typed: typed, current: language, as: .english, layouts: pair) else { return nil }
+                return "\(typed)→\(alt)"
+            }).sorted()
+            print("      one-key words reread into English:", singles.isEmpty ? "none" : singles.joined(separator: " "))
+
             // Spaceless scripts: short words left alone, recovered once a later word is fixed.
             guard detector.rereadsInto(language) else { continue }
             let missedShort = ranked(language, n).filter { w in

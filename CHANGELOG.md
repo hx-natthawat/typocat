@@ -5,6 +5,9 @@
 - Word lists use about a third of the memory: 7 languages at 25 MB instead of 59 MB, and they load faster. Detection results are unchanged.
 - Keys typed while a fix is being written are held and replayed in order.
 - Electron apps (VS Code and others) are asked to expose their text fields to Accessibility.
+- Fixed: a wrong-layout word starting with a Thai tone or vowel mark (hello on the Thai layout is ้ำสสน) was skipped when it came right after a space.
+- When typing very fast, the field check waits up to 120 ms for the app to catch up instead of skipping the fix.
+- A one-key word before a fixed word is taken back when it is I or i ("ณ love" → "I love").
 - Ranks no longer depend on dictionary order, so `--eval` gives the same numbers on every run.
 
 ## 0.1.0 (2026-10-17)

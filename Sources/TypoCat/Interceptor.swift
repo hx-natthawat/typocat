@@ -225,10 +225,18 @@ final class Interceptor {
         return Correction(original: original, replacement: replacement, from: fix.from, to: fix.to)
     }
 
-    private func apply(_ correction: Correction, delimiter: CGEvent, word: String) {
+    private func apply(_ correction: Correction, delimiter: CGEvent, word: String, attempt: Int = 0) {
         // Backspacing blind is only safe if the field holds what we think it does.
         // Unreadable fields fall back to trusting our keystroke buffer.
         if FocusedText.check(endsWith: correction.original) == .mismatch {
+            // When typing fast the app may not have drawn the last keys yet; give it a moment.
+            // The fence is up, so nothing typed meanwhile gets ahead of the rewrite.
+            if attempt < 4 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) {
+                    self.apply(correction, delimiter: delimiter, word: word, attempt: attempt + 1)
+                }
+                return
+            }
             NSLog("TypoCat: field text doesn't end with the typed word; skipping fix")
             post(delimiter, last: true)
             lastCorrection = nil
@@ -248,7 +256,7 @@ final class Interceptor {
         store.correctLanguage(from: correction.to, to: correction.from, in: frontBundleID)
         DispatchQueue.main.async {
             // The field should end with our replacement plus the replayed delimiter.
-            if let prefix = FocusedText.textBeforeCaret(), !prefix.dropLast().hasSuffix(correction.replacement) {
+            if let prefix = FocusedText.textBeforeCaret(), !FocusedText.endsWith(prefix, correction.replacement, ignoringLast: 1) {
                 self.lowerFence()
                 return
             }
