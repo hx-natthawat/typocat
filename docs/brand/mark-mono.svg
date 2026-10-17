@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="18" height="18">
   <title>TypoCat (menu bar template)</title>
-  <!-- Same shape as Sources/TypoCat/StatusIcon.swift: filled keycap, eyes cut out. -->
-  <path fill="#000" fill-rule="evenodd" d="M12 34 L21 3 L42 22 Z M88 34 L79 3 L58 22 Z
-    M28 16 H72 A22 22 0 0 1 94 38 V74 A22 22 0 0 1 72 96 H28 A22 22 0 0 1 6 74 V38 A22 22 0 0 1 28 16 Z
-    M32 44 A9 11 0 1 0 32.01 44 Z M68 44 A9 11 0 1 0 68.01 44 Z"/>
+  <!-- Same shape as Sources/TypoCat/StatusIcon.swift: round cat head, eyes cut out. -->
+  <path fill="#000" fill-rule="evenodd" d="M10 52 Q4 10 16 4 Q26 0 46 26 Z M90 52 Q96 10 84 4 Q74 0 54 26 Z
+    M2 59 A48 39 0 1 0 98 59 A48 39 0 1 0 2 59 Z
+    M22 58 A10 12 0 1 0 42 58 A10 12 0 1 0 22 58 Z M58 58 A10 12 0 1 0 78 58 A10 12 0 1 0 58 58 Z"/>
 </svg>
