@@ -1,0 +1,110 @@
+import XCTest
+@testable import TypoCatCore
+
+/// Core logic against tiny synthetic layouts and word lists, so these run on any
+/// Mac (and CI) without real keyboard layouts or downloaded word lists.
+final class TypoCatCoreTests: XCTestCase {
+    static let ru = Language(rawValue: "ru")
+
+    /// Keys 0...5 type h e l o w r on "en" and р у д щ ц к on "ru" (ЙЦУКЕН positions).
+    func layouts() -> [Language: LayoutMap] {
+        let en = ["h", "e", "l", "o", "w", "r"], ru = ["р", "у", "д", "щ", "ц", "к"]
+        func map(_ letters: [String], _ language: Language) -> LayoutMap {
+            var forward: [KeyStroke: String] = [:]
+            for (i, s) in letters.enumerated() { forward[KeyStroke(keyCode: UInt16(i), shift: false)] = s }
+            return LayoutMap(language: language, inputSourceID: "test.\(language)", forward: forward)
+        }
+        return [.english: map(en, .english), Self.ru: map(ru, Self.ru)]
+    }
+
+    func strokes(_ keys: [UInt16]) -> [KeyStroke] { keys.map { KeyStroke(keyCode: $0, shift: false) } }
+
+    func detector() -> Detector {
+        Detector(dictionaries: [
+            .english: FrequencyDictionary(contents: "hello 5000\nworld 3000\nhell 900\nlower 400\nrow 300\n"),
+            Self.ru: FrequencyDictionary(contents: "друг 4000\nрука 2000\nдом 1500\n"),
+        ])
+    }
+
+    func testFixesWordTypedOnWrongLayout() {
+        let keys = strokes([0, 1, 2, 2, 3]) // h e l l o
+        let fix = detector().decide(strokes: keys, typed: "руддщ", current: Self.ru, layouts: layouts())
+        XCTAssertEqual(fix?.replacement, "hello")
+        XCTAssertEqual(fix?.to, .english)
+    }
+
+    func testLeavesCorrectWordAlone() {
+        let keys = strokes([0, 1, 2, 2, 3])
+        XCTAssertNil(detector().decide(strokes: keys, typed: "hello", current: .english, layouts: layouts()))
+    }
+
+    func testProtectedCommandsInTerminal() {
+        XCTAssertTrue(ProtectedWords.contains("kubectl", in: .terminal))
+        XCTAssertFalse(ProtectedWords.contains("kubectl", in: .general))
+        XCTAssertTrue(ProtectedWords.contains("git", in: .general))
+        XCTAssertEqual(AppCategory(bundleID: "com.apple.Terminal"), .terminal)
+        XCTAssertEqual(AppCategory(bundleID: "com.jetbrains.intellij"), .code)
+    }
+
+    func testDeadKeysCompose() {
+        let acute = KeyStroke(keyCode: 9, shift: false), a = KeyStroke(keyCode: 0, shift: false)
+        let map = LayoutMap(language: Language(rawValue: "el"), inputSourceID: "test.el",
+                            forward: [a: "α", acute: "΄"], deadKeys: [acute: [a: "ά"]])
+        XCTAssertEqual(map.render([acute, a, a]), "άα")
+        XCTAssertEqual(map.inverse()["ά"], [acute, a])
+    }
+
+    func testLanguageCodesNormalize() {
+        XCTAssertEqual(Language(rawValue: "en-US"), .english)
+        XCTAssertEqual(Language(rawValue: "zh_Hant").rawValue, "zh")
+        XCTAssertTrue(Language.thai.writesWithoutSpaces)
+        XCTAssertFalse(Self.ru.writesWithoutSpaces)
+    }
+
+    func testCommonnessFollowsRank() {
+        let dict = FrequencyDictionary(contents: "a 100\nb 10\nc 1\n")
+        XCTAssertEqual(dict.commonness(of: "a"), 1)
+        XCTAssertGreaterThan(dict.commonness(of: "b"), dict.commonness(of: "c"))
+        XCTAssertEqual(dict.commonness(of: "zzz"), 0)
+    }
+
+    func testCompoundsCreditTheirParts() {
+        // "ทำ" alone is rare, but it appears inside a common phrase.
+        let contents = "ทำอะไร 500\nอะไร 300\nทำ 2\n"
+        let plain = FrequencyDictionary(contents: contents)
+        let split = FrequencyDictionary(contents: contents, splitCompounds: true)
+        XCTAssertEqual(plain.count(of: "ทำ"), 2)
+        XCTAssertEqual(split.count(of: "ทำ"), 502)
+    }
+
+    func testThaiOrthographyRejectsNoise() {
+        XCTAssertTrue(ThaiOrthography.isPlausible("สวัสดี"))
+        XCTAssertFalse(ThaiOrthography.isPlausible("้ำสสน")) // starts with a tone mark
+    }
+
+    func testSerbianTransliteration() {
+        XCTAssertEqual(SerbianScript.cyrillic("zdravo"), "здраво")
+        XCTAssertEqual(SerbianScript.cyrillic("ljubav"), "љубав")
+        XCTAssertEqual(SerbianScript.cyrillic("džep"), "џеп")
+        XCTAssertNil(SerbianScript.cyrillic("xyz"))
+    }
+
+    func testTypoFixPicksClearWinner() {
+        let d = detector()
+        XCTAssertNil(d.typoFix("helo", in: .english))                 // hello 5000 vs hell 900: not 10x apart
+        XCTAssertEqual(d.typoFix("wrold,", in: .english), "world,")   // keeps punctuation
+        XCTAssertNil(d.typoFix("Wrold", in: .english))                // capitalized: maybe a name
+        XCTAssertNil(d.typoFix("wrold", in: .english, category: .terminal))
+        XCTAssertNil(d.typoFix("hello", in: .english))                // already a word
+    }
+
+    func testAppLanguageProfileNeedsClearMajority() {
+        var profile = AppLanguageProfile()
+        for _ in 0..<19 { profile.record(.english, in: "app") }
+        XCTAssertNil(profile.dominant(in: "app"))
+        profile.record(.english, in: "app")
+        XCTAssertEqual(profile.dominant(in: "app"), .english)
+        profile.reassign(from: .english, to: .thai, in: "app")
+        XCTAssertEqual(profile.counts["app"]?["th"], 1)
+    }
+}

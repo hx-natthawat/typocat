@@ -1,0 +1,20 @@
+name: Language or layout request
+description: Ask for a language or keyboard layout to be supported
+labels: [language]
+body:
+  - type: input
+    id: language
+    attributes:
+      label: Language and macOS layout name
+      placeholder: Armenian (Armenian - HM QWERTY)
+    validations:
+      required: true
+  - type: textarea
+    id: examples
+    attributes:
+      label: A few everyday words, and what they look like typed on the wrong layout
+      description: Helps us add self-test cases.
+  - type: input
+    id: wordlist
+    attributes:
+      label: Known open word-frequency list for this language (optional)

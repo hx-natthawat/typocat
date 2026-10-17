@@ -5,16 +5,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-# English plus languages whose macOS layouts use a non-Latin script (Language.bundled).
-BASE=https://raw.githubusercontent.com/hermitdave/FrequencyWords/master/content/2018
-for lang in en ru uk bg sr mk kk el he ar fa ur hy ka hi th; do
-  f="Data/${lang}_50k.txt"
-  [ -f "$f" ] && continue
-  # Small corpora only publish a full list; keep its 50k most frequent lines.
-  curl -fsSL -o "$f" "$BASE/$lang/${lang}_50k.txt" \
-    || { curl -fsSL "$BASE/$lang/${lang}_full.txt" | head -n 50000 > "$f"; } \
-    || { rm -f "$f"; echo "warning: no word list for $lang; its layout won't be detected"; }
-done
+./scripts/fetch-word-lists.sh
 
 swift build -c release
 APP=build/TypoCat.app

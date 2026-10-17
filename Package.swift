@@ -13,5 +13,7 @@ let package = Package(
             dependencies: ["TypoCatCore"],
             linkerSettings: [.linkedFramework("Carbon"), .linkedFramework("AppKit")]
         ),
+        // Needs Xcode (XCTest isn't in the Command Line Tools); CI runs it.
+        .testTarget(name: "TypoCatCoreTests", dependencies: ["TypoCatCore"]),
     ]
 )

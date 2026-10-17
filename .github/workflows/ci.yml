@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache word lists
+        uses: actions/cache@v4
+        with:
+          path: Data
+          key: word-lists-${{ hashFiles('scripts/fetch-word-lists.sh') }}
+
+      - name: Fetch word lists
+        run: ./scripts/fetch-word-lists.sh
+
+      - name: Build
+        run: swift build -c release
+
+      - name: Unit tests
+        run: swift test
+
+      # Uses every keyboard layout installed on the runner, enabled or not.
+      - name: Self-test against real layouts
+        run: .build/release/TypoCat --selftest
+
+      - name: Detection accuracy
+        run: .build/release/TypoCat --eval 2000 | tee eval.txt
+
+      - name: Build app bundle
+        run: ./scripts/build-app.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: eval
+          path: eval.txt

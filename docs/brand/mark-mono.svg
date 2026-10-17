@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="18" height="18">
+  <title>TypoCat (menu bar template)</title>
+  <g fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M17 26 L23 7 L36 20 M83 26 L77 7 L64 20" stroke-width="6"/>
+    <rect x="11" y="19" width="78" height="74" rx="18" stroke-width="6"/>
+    <path d="M86 38 L32 90" stroke-width="5"/>
+  </g>
+</svg>

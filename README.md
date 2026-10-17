@@ -1,4 +1,10 @@
+<p align="center"><img src="docs/brand/mark.svg" width="96" alt="TypoCat"></p>
+
 # TypoCat
+
+[![CI](https://github.com/hx-natthawat/typocat/actions/workflows/ci.yml/badge.svg)](https://github.com/hx-natthawat/typocat/actions/workflows/ci.yml)
+![macOS 13+](https://img.shields.io/badge/macOS-13%2B-0B7A75)
+![License: MIT](https://img.shields.io/badge/license-MIT-F2A12B)
 
 A macOS menu-bar app that fixes words typed on the wrong keyboard layout
 (`ghbdtn` → `привет`, `akuo` → `שלום`, `l;ylfu` → `สวัสดี`, `руддщ` → `hello`)
@@ -7,10 +13,10 @@ needs a word list for the layout's language.
 
 ## Build and run
 
-Requires macOS 13 or later and Xcode command-line tools.
+Requires macOS 13 or later and the Xcode command-line tools (full Xcode for `swift test`).
 
 ```bash
-./scripts/build-app.sh           # downloads word lists, builds build/TypoCat.app
+./scripts/build-app.sh           # fetches word lists, builds build/TypoCat.app
 open build/TypoCat.app       # grant Accessibility access when asked
 swift run TypoCat --selftest # detector checks against this Mac's real layouts
 swift run TypoCat --eval 5000 # per-language fix rate, using every layout installed on this Mac
@@ -129,6 +135,11 @@ password boxes.
 - Learn the user's own vocabulary.
 - Remember the language per website in browsers.
 - Latin-to-Latin layouts (AZERTY, QWERTZ, Dvorak), where wrong-layout text still looks like letters.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md): setup, how to measure a detection
+change, and how to add a language. Privacy details are in [SECURITY.md](SECURITY.md).
 
 ## Credits and license
 

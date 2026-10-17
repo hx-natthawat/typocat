@@ -85,6 +85,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hint.isEnabled = false
         menu.addItem(hint)
         menu.addItem(.separator())
+        let about = NSMenuItem(title: "About TypoCat", action: #selector(showAbout), keyEquivalent: "")
+        about.target = self
+        menu.addItem(about)
         menu.addItem(NSMenuItem(title: "Quit TypoCat", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         statusItem.menu = menu
         refreshTitle()
@@ -119,6 +122,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func toggleMatchLayout() {
         store.matchLayoutPerApp.toggle()
         matchLayoutItem.state = store.matchLayoutPerApp ? .on : .off
+    }
+
+    /// Credits include the word lists' CC BY-SA attribution, which redistribution requires.
+    @objc private func showAbout() {
+        let text = [
+            "Fixes words typed on the wrong keyboard layout.",
+            "Open source under the MIT license: github.com/hx-natthawat/typocat",
+            "",
+            "Word lists: FrequencyWords by Hermit Dave (github.com/hermitdave/FrequencyWords),",
+            "licensed CC BY-SA 4.0, built from OpenSubtitles.",
+        ].joined(separator: "\n")
+        let credits = NSAttributedString(string: text, attributes: [
+            .font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.labelColor,
+        ])
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.orderFrontStandardAboutPanel(options: [.credits: credits, .applicationName: "TypoCat"])
     }
 
     @objc private func toggleFixTypos() {

@@ -1,0 +1,47 @@
+name: Bug report
+description: A word was changed when it shouldn't be, or wasn't fixed when it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please don't paste anything private. TypoCat never sends keystrokes anywhere; this form is the only way we see an example.
+  - type: input
+    id: typed
+    attributes:
+      label: What you typed (as it appeared)
+      placeholder: ghbdtn
+    validations:
+      required: true
+  - type: input
+    id: expected
+    attributes:
+      label: What you expected
+      placeholder: привет
+    validations:
+      required: true
+  - type: input
+    id: got
+    attributes:
+      label: What TypoCat did
+      placeholder: Nothing / changed it to … / deleted text
+    validations:
+      required: true
+  - type: input
+    id: layouts
+    attributes:
+      label: Enabled keyboard layouts
+      description: System Settings → Keyboard → Input Sources
+      placeholder: ABC, Russian - PC
+    validations:
+      required: true
+  - type: input
+    id: app
+    attributes:
+      label: App you were typing in
+      placeholder: Slack 4.41, Safari 18, Terminal
+  - type: input
+    id: versions
+    attributes:
+      label: TypoCat commit or version, macOS version
+      placeholder: 91f4dfe, macOS 15.3
