@@ -39,8 +39,9 @@ final class TypoCatCoreTests: XCTestCase {
     }
 
     func testProtectedCommandsInTerminal() {
-        XCTAssertTrue(ProtectedWords.contains("kubectl", in: .terminal))
-        XCTAssertFalse(ProtectedWords.contains("kubectl", in: .general))
+        // Shell commands are protected only where commands get typed; tech names everywhere.
+        XCTAssertTrue(ProtectedWords.contains("chmod", in: .terminal))
+        XCTAssertFalse(ProtectedWords.contains("chmod", in: .general))
         XCTAssertTrue(ProtectedWords.contains("git", in: .general))
         XCTAssertEqual(AppCategory(bundleID: "com.apple.Terminal"), .terminal)
         XCTAssertEqual(AppCategory(bundleID: "com.jetbrains.intellij"), .code)
