@@ -1,4 +1,4 @@
-# LangSwapper
+# TypoCat
 
 A macOS menu-bar app that fixes words typed on the wrong keyboard layout
 (`ghbdtn` → `привет`, `akuo` → `שלום`, `l;ylfu` → `สวัสดี`, `руддщ` → `hello`)
@@ -10,18 +10,18 @@ needs a word list for the layout's language.
 Requires macOS 13 or later and Xcode command-line tools.
 
 ```bash
-./scripts/build-app.sh           # downloads word lists, builds build/LangSwapper.app
-open build/LangSwapper.app       # grant Accessibility access when asked
-swift run LangSwapper --selftest # detector checks against this Mac's real layouts
-swift run LangSwapper --eval 5000 # per-language fix rate, using every layout installed on this Mac
+./scripts/build-app.sh           # downloads word lists, builds build/TypoCat.app
+open build/TypoCat.app       # grant Accessibility access when asked
+swift run TypoCat --selftest # detector checks against this Mac's real layouts
+swift run TypoCat --eval 5000 # per-language fix rate, using every layout installed on this Mac
 ```
 
 Enable the layouts you type with in System Settings → Keyboard → Input Sources.
-LangSwapper loads word lists only for the layouts you have enabled.
+TypoCat loads word lists only for the layouts you have enabled.
 
 ## Languages
 
-Measured with `swift run LangSwapper --eval 5000` on each language's 5000 most
+Measured with `swift run TypoCat --eval 5000` on each language's 5000 most
 frequent words, paired with English. "Fixed" is the share of words typed on the
 wrong layout that get corrected; "changed" is the share of correctly typed words
 that get changed by mistake.
@@ -59,20 +59,20 @@ aren't supported.
 
 The build is ad-hoc signed by default, so macOS drops Accessibility access
 after each rebuild. To keep it, sign with a stable certificate:
-`SIGN_IDENTITY="Your Cert Name" ./scripts/build-app.sh`. If corrections stop, remove LangSwapper from
+`SIGN_IDENTITY="Your Cert Name" ./scripts/build-app.sh`. If corrections stop, remove TypoCat from
 System Settings → Privacy & Security → Accessibility and add it again.
 
 ## Using it
 
 - **Fixing a word:** type it on the wrong layout and press Space, Return or Tab. The word is retyped on the right layout, and the keyboard switches to that layout.
-- **Undo:** press Backspace or ⌘Z right after a fix. LangSwapper won't fix that word again.
+- **Undo:** press Backspace or ⌘Z right after a fix. TypoCat won't fix that word again.
 - **Convert now:** press ⌃⌥Space to convert the current word whatever the detector thinks.
 - **Menu options:**
-  - **Disable in \<App\>:** turns LangSwapper off for the front app.
+  - **Disable in \<App\>:** turns TypoCat off for the front app.
   - **Match layout to each app:** switching to an app selects the language you usually type there. This starts after 20 words and needs a 75% majority.
   - **Open at login.**
 - **Never converted:** tech names (`git`, `api`, `json`…). In terminals and code editors, shell commands are not converted either.
-- **Field check:** before rewriting, LangSwapper reads the focused field through the Accessibility API and checks that it ends with the typed word. If it doesn't (autocomplete, a moved cursor), the fix is skipped. Apps that don't expose their text fall back to the keystroke buffer.
+- **Field check:** before rewriting, TypoCat reads the focused field through the Accessibility API and checks that it ends with the typed word. If it doesn't (autocomplete, a moved cursor), the fix is skipped. Apps that don't expose their text fall back to the keystroke buffer.
 
 ## How it works
 
@@ -85,15 +85,15 @@ Code layout:
 
 | Path | What's in it |
 |---|---|
-| `Sources/LangSwapperCore` | Platform-free logic: layout maps, dictionaries, scoring, app categories, per-app language counts |
-| `Sources/LangSwapper` | The app: event tap, input sources, Accessibility checks, menu, settings |
+| `Sources/TypoCatCore` | Platform-free logic: layout maps, dictionaries, scoring, app categories, per-app language counts |
+| `Sources/TypoCat` | The app: event tap, input sources, Accessibility checks, menu, settings |
 
-Local data lives in `~/Library/Application Support/LangSwapper/`:
+Local data lives in `~/Library/Application Support/TypoCat/`:
 `ignoredWords.json` (words you undid) and `appLanguageCounts.json`.
 
 ## Privacy
 
-Everything runs on your Mac. LangSwapper keeps only the current word in memory.
+Everything runs on your Mac. TypoCat keeps only the current word in memory.
 It does not log or send keystrokes, and it pauses in secure input fields such as
 password boxes.
 

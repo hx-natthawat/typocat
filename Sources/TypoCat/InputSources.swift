@@ -1,6 +1,6 @@
 import Carbon
 import Foundation
-import LangSwapperCore
+import TypoCatCore
 
 /// Enabled keyboard layouts, their key maps (via UCKeyTranslate) and switching (via TIS).
 final class InputSources {

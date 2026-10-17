@@ -1,9 +1,9 @@
 import Foundation
-import LangSwapperCore
+import TypoCatCore
 
 /// Settings and learned state that survive restarts.
 /// Settings live in UserDefaults; learned state lives in
-/// ~/Library/Application Support/LangSwapper/ (ignoredWords.json, appLanguageCounts.json).
+/// ~/Library/Application Support/TypoCat/ (ignoredWords.json, appLanguageCounts.json).
 final class UserStore {
     private let defaults = UserDefaults.standard
     private let excludedKey = "excludedApps"
@@ -22,7 +22,7 @@ final class UserStore {
 
     init() {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("LangSwapper", isDirectory: true)
+            .appendingPathComponent("TypoCat", isDirectory: true)
         try? FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
         fileURL = support.appendingPathComponent("ignoredWords.json")
         appLanguagesURL = support.appendingPathComponent("appLanguageCounts.json")

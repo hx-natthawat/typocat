@@ -1,6 +1,6 @@
 import AppKit
 import Carbon
-import LangSwapperCore
+import TypoCatCore
 import ServiceManagement
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -81,7 +81,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hint.isEnabled = false
         menu.addItem(hint)
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Quit LangSwapper", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        menu.addItem(NSMenuItem(title: "Quit TypoCat", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         statusItem.menu = menu
         refreshTitle()
     }
@@ -109,7 +109,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard store.matchLayoutPerApp, interceptor.enabled, let id = app.bundleIdentifier, !store.isExcluded(id),
               let language = store.appLanguages.dominant(in: id), language != inputSources.currentLanguage() else { return }
         inputSources.select(language)
-        NSLog("LangSwapper: \(app.localizedName ?? id) matched layout to its dominant language (\(language.rawValue))")
+        NSLog("TypoCat: \(app.localizedName ?? id) matched layout to its dominant language (\(language.rawValue))")
     }
 
     @objc private func toggleMatchLayout() {
@@ -122,7 +122,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         do {
             if service.status == .enabled { try service.unregister() } else { try service.register() }
         } catch {
-            NSLog("LangSwapper: open at login failed: \(error.localizedDescription)")
+            NSLog("TypoCat: open at login failed: \(error.localizedDescription)")
         }
         loginItem.state = service.status == .enabled ? .on : .off
     }
@@ -192,7 +192,7 @@ enum Dictionaries {
                 if language.rawValue == "sr" { contents = SerbianScript.addingCyrillic(to: contents) }
                 dicts[language] = FrequencyDictionary(contents: contents, splitCompounds: language.writesWithoutSpaces)
             } else {
-                NSLog("LangSwapper: no word list for \(language.rawValue); its layout can't be detected")
+                NSLog("TypoCat: no word list for \(language.rawValue); its layout can't be detected")
             }
         }
         return Detector(dictionaries: dicts)

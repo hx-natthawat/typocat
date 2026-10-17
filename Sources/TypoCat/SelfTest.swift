@@ -1,9 +1,9 @@
 import Foundation
-import LangSwapperCore
+import TypoCatCore
 
 /// Checks the detector against every keyboard layout installed on this Mac,
 /// enabled or not, so languages can be tested without turning them on.
-/// Usage: `swift run LangSwapper --selftest` and `swift run LangSwapper --eval [N]`
+/// Usage: `swift run TypoCat --selftest` and `swift run TypoCat --eval [N]`
 enum SelfTest {
     static func run() -> Bool {
         let layouts = InputSources.installedLayouts()

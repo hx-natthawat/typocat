@@ -1,12 +1,12 @@
 import AppKit
 import Carbon
-import LangSwapperCore
+import TypoCatCore
 
 /// Watches keystrokes through a CGEventTap, keeps the current word as physical
 /// keystrokes, and rewrites it when the Detector says the layout was wrong.
 final class Interceptor {
     /// Marks events we post so the tap lets them through untouched.
-    static let syntheticTag: Int64 = 0x4C53_5750 // "LSWP"
+    static let syntheticTag: Int64 = 0x5459_5043 // "TYPC"
 
     var enabled = true
     var onCorrection: ((Correction) -> Void)?
@@ -192,7 +192,7 @@ final class Interceptor {
         // Backspacing blind is only safe if the field holds what we think it does.
         // Unreadable fields fall back to trusting our keystroke buffer.
         if FocusedText.check(endsWith: correction.original) == .mismatch {
-            NSLog("LangSwapper: field text doesn't end with the typed word; skipping fix")
+            NSLog("TypoCat: field text doesn't end with the typed word; skipping fix")
             post(delimiter)
             lastCorrection = nil
             return

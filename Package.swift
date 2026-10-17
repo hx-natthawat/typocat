@@ -2,15 +2,15 @@
 import PackageDescription
 
 let package = Package(
-    name: "LangSwapper",
+    name: "TypoCat",
     platforms: [.macOS(.v13)],
     targets: [
         // Pure, platform-free detection logic: layout maps, dictionaries, scoring.
-        .target(name: "LangSwapperCore"),
+        .target(name: "TypoCatCore"),
         // Menu-bar app: event tap, input sources (TIS/UCKeyTranslate), text rewriting.
         .executableTarget(
-            name: "LangSwapper",
-            dependencies: ["LangSwapperCore"],
+            name: "TypoCat",
+            dependencies: ["TypoCatCore"],
             linkerSettings: [.linkedFramework("Carbon"), .linkedFramework("AppKit")]
         ),
     ]
