@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>TypoCat app icon</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#DDE7E0"/></linearGradient>
+    <linearGradient id="face" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#14968D"/><stop offset="1" stop-color="#0B7A75"/></linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F7B347"/><stop offset="1" stop-color="#F2A12B"/></linearGradient>
+    <clipPath id="cap"><rect x="8" y="16" width="84" height="80" rx="20"/></clipPath>
+    <clipPath id="side"><rect x="8" y="22" width="84" height="80" rx="20"/></clipPath>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+  <rect x="101" y="101" width="822" height="822" rx="184" fill="none" stroke="#142220" stroke-opacity=".07" stroke-width="2"/>
+  <g transform="translate(212 178) scale(6)">
+    <!-- soft shadow on the icon plate -->
+    <rect x="12" y="34" width="76" height="74" rx="22" fill="#142220" opacity=".06"/>
+    <rect x="10" y="30" width="80" height="76" rx="21" fill="#142220" opacity=".06"/>
+    <!-- keycap side: same split, darker -->
+    <g clip-path="url(#side)">
+      <rect x="0" y="0" width="100" height="110" fill="#065A56"/>
+      <path d="M92 42 V110 H20 Z" fill="#C97F14"/>
+    </g>
+    <path d="M14 30 L22 4 L40 22 Z M86 30 L78 4 L60 22 Z" fill="#0B7A75" stroke="#0B7A75" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M20 22 L24 11 L32 19 Z M80 22 L76 11 L68 19 Z" fill="#F6B19C"/>
+    <!-- keycap top -->
+    <g clip-path="url(#cap)">
+      <rect x="0" y="0" width="100" height="100" fill="url(#face)"/>
+      <path d="M92 36 V100 H28 Z" fill="url(#gold)"/>
+      <rect x="8" y="16" width="84" height="3" fill="#FFF" opacity=".18"/>
+    </g>
+    <!-- Manee's eyes (teal left, marigold right), glancing at the fix -->
+    <path d="M19 50 q11 -12 22 0 q-11 12 -22 0 z M47 50 q11 -12 22 0 q-11 12 -22 0 z" fill="#FFFDF7"/>
+    <circle cx="32" cy="50" r="5.2" fill="#0B7A75"/>
+    <circle cx="60" cy="50" r="5.2" fill="#F2A12B"/>
+    <ellipse cx="32.6" cy="50" rx="1.7" ry="4.6" fill="#142220"/>
+    <ellipse cx="60.6" cy="50" rx="1.7" ry="4.6" fill="#142220"/>
+    <circle cx="34" cy="47.4" r="1.3" fill="#FFF"/>
+    <circle cx="62" cy="47.4" r="1.3" fill="#FFF"/>
+  </g>
+</svg>

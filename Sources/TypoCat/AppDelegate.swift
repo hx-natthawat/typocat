@@ -62,6 +62,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func buildMenu() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        statusItem.button?.image = StatusIcon.image
+        statusItem.button?.imagePosition = .imageLeading
         let menu = NSMenu()
         enabledItem.target = self
         enabledItem.state = .on
@@ -98,6 +100,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let lang = inputSources.currentLanguage()?.shortName ?? "—"
         let active = interceptor.enabled && !store.isExcluded(frontApp?.bundleIdentifier)
         statusItem.button?.title = active ? lang : "\(lang)·off"
+        statusItem.button?.appearsDisabled = !active
         let name = frontApp?.localizedName ?? "this app"
         excludeItem.title = "Disable in \(name)"
         excludeItem.state = store.isExcluded(frontApp?.bundleIdentifier) ? .on : .off

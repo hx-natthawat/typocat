@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- App icon: the cat-eared keycap with Manee's eyes. The menu bar shows a matching cat glyph next to the layout code and dims when TypoCat is off.
+- Social preview banner, and `scripts/make-brand-assets.sh` to render the icon and banner from `docs/brand/app-icon.svg`.
 - Word lists use about a third of the memory: 7 languages at 25 MB instead of 59 MB, and they load faster. Detection results are unchanged.
 - Keys typed while a fix is being written are held and replayed in order.
 - Electron apps (VS Code and others) are asked to expose their text fields to Accessibility.

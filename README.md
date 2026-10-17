@@ -1,4 +1,4 @@
-<p align="center"><img src="docs/brand/mark.svg" width="96" alt="TypoCat"></p>
+<p align="center"><img src="docs/brand/social-preview.png" width="640" alt="TypoCat: ghbdtn becomes привет, l;ylfu becomes สวัสดี, akuo becomes שלום, recieve becomes receive"></p>
 
 # TypoCat
 
