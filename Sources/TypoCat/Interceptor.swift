@@ -7,6 +7,8 @@ import TypoCatCore
 final class Interceptor {
     /// Marks events we post so the tap lets them through untouched.
     static let syntheticTag: Int64 = 0x5459_5043 // "TYPC"
+    /// Marks the last event of a rewrite; seeing it come back through the tap means the rewrite is done.
+    static let fenceTag: Int64 = syntheticTag + 1
 
     var enabled = true
     var onCorrection: ((Correction) -> Void)?
@@ -24,6 +26,12 @@ final class Interceptor {
     private let eventSource = CGEventSource(stateID: .privateState)
 
     private var strokes: [KeyStroke] = []
+    /// Up from swallowing a word's delimiter until the rewrite's last event passes the tap.
+    /// Keys typed meanwhile are held and replayed afterwards, so a fast typist's next
+    /// letters can't land inside the word being erased.
+    private var fenceUp = false
+    private var fenceGeneration = 0
+    private var heldEvents: [CGEvent] = []
     private var lastCorrection: (correction: Correction, delimiter: CGEvent, word: String)?
     /// Words just typed and left alone, each followed by one space, oldest first.
     /// A later fix may reread them (short words like `z,` for ผม are ambiguous alone).
@@ -44,7 +52,8 @@ final class Interceptor {
     @discardableResult
     func start() -> Bool {
         guard tap == nil else { return true }
-        let mask = (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.leftMouseDown.rawValue)
+        let mask = (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.keyUp.rawValue)
+            | (1 << CGEventType.leftMouseDown.rawValue)
             | (1 << CGEventType.rightMouseDown.rawValue)
         let callback: CGEventTapCallBack = { _, type, event, refcon in
             let me = Unmanaged<Interceptor>.fromOpaque(refcon!).takeUnretainedValue()
@@ -75,7 +84,18 @@ final class Interceptor {
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
             return pass
         }
-        if event.getIntegerValueField(.eventSourceUserData) == Self.syntheticTag { return pass }
+        switch event.getIntegerValueField(.eventSourceUserData) {
+        case Self.syntheticTag: return pass
+        case Self.fenceTag:
+            DispatchQueue.main.async { self.lowerFence() }
+            return pass
+        default: break
+        }
+        if fenceUp && (type == .keyDown || type == .keyUp), let copy = event.copy() {
+            heldEvents.append(copy)
+            return nil
+        }
+        if type == .keyUp { return pass }
         guard type == .keyDown else { reset(); return pass }
         guard enabled, !IsSecureEventInputEnabled(), !store.isExcluded(frontBundleID) else { reset(); return pass }
 
@@ -90,6 +110,7 @@ final class Interceptor {
         // ⌘Z right after a fix undoes the fix, not the app's last edit.
         if keyCode == Key.z, flags.contains(.maskCommand), !flags.contains(.maskShift),
            strokes.isEmpty, let last = lastCorrection {
+            raiseFence()
             undo(last.correction, delimiter: last.delimiter, word: last.word)
             return nil
         }
@@ -100,6 +121,7 @@ final class Interceptor {
 
         if keyCode == Key.delete {
             if strokes.isEmpty, let last = lastCorrection {
+                raiseFence()
                 undo(last.correction, delimiter: last.delimiter, word: last.word)
                 return nil
             }
@@ -124,6 +146,7 @@ final class Interceptor {
                 lastCorrection = nil
                 if let typoFix = typoCorrection(typed, language: current), let delimiter = event.copy() {
                     recentWords.removeAll()
+                    raiseFence()
                     DispatchQueue.main.async { self.apply(typoFix, delimiter: delimiter, word: typed) }
                     return nil
                 }
@@ -142,6 +165,7 @@ final class Interceptor {
             let correction = extendBackwards(wordFix)
             recentWords.removeAll()
             // Swallow the delimiter now; replay it after the rewrite so ordering holds.
+            raiseFence()
             DispatchQueue.main.async { self.apply(correction, delimiter: delimiter, word: typed) }
             return nil
         }
@@ -206,14 +230,14 @@ final class Interceptor {
         // Unreadable fields fall back to trusting our keystroke buffer.
         if FocusedText.check(endsWith: correction.original) == .mismatch {
             NSLog("TypoCat: field text doesn't end with the typed word; skipping fix")
-            post(delimiter)
+            post(delimiter, last: true)
             lastCorrection = nil
             return
         }
         store.recordLanguage(correction.to, in: frontBundleID)
         replace(scalarCount: correction.original.unicodeScalars.count, with: correction.replacement)
         inputSources.select(correction.to)
-        post(delimiter)
+        post(delimiter, last: true)
         lastCorrection = (correction, delimiter, word)
         onCorrection?(correction)
     }
@@ -224,11 +248,14 @@ final class Interceptor {
         store.correctLanguage(from: correction.to, to: correction.from, in: frontBundleID)
         DispatchQueue.main.async {
             // The field should end with our replacement plus the replayed delimiter.
-            if let prefix = FocusedText.textBeforeCaret(), !prefix.dropLast().hasSuffix(correction.replacement) { return }
+            if let prefix = FocusedText.textBeforeCaret(), !prefix.dropLast().hasSuffix(correction.replacement) {
+                self.lowerFence()
+                return
+            }
             // +1 removes the replayed delimiter, which we type again after the original.
             self.replace(scalarCount: correction.replacement.unicodeScalars.count + 1, with: correction.original)
-            self.post(delimiter)
             self.inputSources.select(correction.from)
+            self.post(delimiter, last: true)
         }
     }
 
@@ -256,8 +283,29 @@ final class Interceptor {
         post(e)
     }
 
-    private func post(_ event: CGEvent) {
-        event.setIntegerValueField(.eventSourceUserData, value: Self.syntheticTag)
+    private func post(_ event: CGEvent, last: Bool = false) {
+        event.setIntegerValueField(.eventSourceUserData, value: last ? Self.fenceTag : Self.syntheticTag)
         event.post(tap: .cghidEventTap)
+    }
+
+    // MARK: - Holding keys during a rewrite
+
+    private func raiseFence() {
+        fenceUp = true
+        fenceGeneration += 1
+        let generation = fenceGeneration
+        // Never hold the keyboard hostage: give up after a moment even if the marker is lost.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+            if self?.fenceGeneration == generation { self?.lowerFence() }
+        }
+    }
+
+    /// Replays held keys in order; they pass through the tap again as ordinary typing.
+    private func lowerFence() {
+        guard fenceUp else { return }
+        fenceUp = false
+        let events = heldEvents
+        heldEvents.removeAll()
+        for event in events { event.post(tap: .cghidEventTap) }
     }
 }

@@ -24,13 +24,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         inputSources.reload()
-        loadedLanguages = Set(inputSources.layouts.keys)
-        interceptor = Interceptor(detector: Dictionaries.makeDetector(for: loadedLanguages),
+        // Word lists load in the background (Thai alone takes ~1s); until then nothing is fixed.
+        interceptor = Interceptor(detector: Detector(dictionaries: [:]),
                                   inputSources: inputSources, store: store)
         interceptor.onCorrection = { [weak self] c in
             self?.lastCorrectionItem.title = "Last: \(c.original) → \(c.replacement)"
         }
         buildMenu()
+        reloadLayouts()
         observeSystem()
         setFrontApp(NSWorkspace.shared.frontmostApplication)
         startWhenTrusted()
@@ -213,15 +214,20 @@ enum Dictionaries {
     }
 
     /// Loads word lists only for `languages` (the enabled layouts): each list costs a few MB.
+    /// Loads all lists in parallel, so startup costs about as long as the slowest one.
     static func makeDetector(for languages: some Sequence<Language>) -> Detector {
+        let wanted = Array(Set(languages))
         var dicts: [Language: FrequencyDictionary] = [:]
-        for language in Set(languages) {
-            if let url = url(for: language), var contents = try? String(contentsOf: url, encoding: .utf8) {
-                if language.rawValue == "sr" { contents = SerbianScript.addingCyrillic(to: contents) }
-                dicts[language] = FrequencyDictionary(contents: contents, splitCompounds: language.writesWithoutSpaces)
-            } else {
+        let lock = NSLock()
+        DispatchQueue.concurrentPerform(iterations: wanted.count) { i in
+            let language = wanted[i]
+            guard let url = url(for: language), var contents = try? String(contentsOf: url, encoding: .utf8) else {
                 NSLog("TypoCat: no word list for \(language.rawValue); its layout can't be detected")
+                return
             }
+            if language.rawValue == "sr" { contents = SerbianScript.addingCyrillic(to: contents) }
+            let dict = FrequencyDictionary(contents: contents, splitCompounds: language.writesWithoutSpaces)
+            lock.lock(); dicts[language] = dict; lock.unlock()
         }
         return Detector(dictionaries: dicts)
     }
