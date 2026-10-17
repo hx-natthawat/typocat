@@ -229,6 +229,8 @@ enum Dictionaries {
                 dicts[language] = FrequencyDictionary(contents: contents, splitCompounds: language.writesWithoutSpaces)
             }
         }
+        // Hand the freed parsing buffers back to the system, or they stay in the footprint.
+        malloc_zone_pressure_relief(nil, 0)
         return Detector(dictionaries: dicts)
     }
 }

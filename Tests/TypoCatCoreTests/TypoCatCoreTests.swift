@@ -69,6 +69,16 @@ final class TypoCatCoreTests: XCTestCase {
         XCTAssertEqual(dict.commonness(of: "zzz"), 0)
     }
 
+    func testLookupIgnoresCaseAndNormalization() {
+        let dict = FrequencyDictionary(contents: "caf\u{E9} 5\nzebra 3\napple 9\n")
+        XCTAssertEqual(dict.count(of: "cafe\u{301}"), 5) // e + combining accent
+        XCTAssertEqual(dict.count(of: "Apple"), 9)
+        XCTAssertEqual(dict.count(of: "zebr"), 0)
+        XCTAssertEqual(dict.count(of: "zebras"), 0)
+        XCTAssertEqual(dict.count(of: ""), 0)
+        XCTAssertEqual(dict.segmentCoverage("applezebra"), 1)
+    }
+
     func testCompoundsCreditTheirParts() {
         // "ทำ" alone is rare, but it appears inside a common phrase.
         let contents = "ทำอะไร 500\nอะไร 300\nทำ 2\n"

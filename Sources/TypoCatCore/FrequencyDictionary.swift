@@ -2,10 +2,15 @@ import Foundation
 
 /// Ranked word list in FrequencyWords format: one "word count" pair per line.
 public final class FrequencyDictionary: @unchecked Sendable {
-    /// Count and rank (1 = most frequent) per word, in one table to halve memory. Ranks are
-    /// comparable across languages, unlike raw counts: the Thai corpus is far smaller than English.
-    private let entries: [String: Entry]
-    private struct Entry { let count: Int32; let rank: Int32 }
+    /// Words as NFC UTF-8, sorted bytewise and packed into one buffer; word i is
+    /// bytes[offsets[i]..<offsets[i + 1]]. A [String: Entry] table took about 4x the memory,
+    /// mostly for the separate heap allocation behind every non-ASCII String.
+    private let bytes: [UInt8]
+    private let offsets: [Int32]
+    private let counts: [Int32]
+    /// 1 = most frequent. Ranks are comparable across languages, unlike raw counts:
+    /// the Thai corpus is far smaller than English.
+    private let ranks: [Int32]
     /// Longest entry measured in Unicode scalars, bounds the segmentation search.
     public let maxScalarLength: Int
     /// Letters seen in the list, most frequent first; candidate edits draw from these.
@@ -20,7 +25,7 @@ public final class FrequencyDictionary: @unchecked Sendable {
         for line in contents.split(whereSeparator: \.isNewline) {
             let parts = line.split(separator: " ")
             guard parts.count >= 2, let n = Int(parts[parts.count - 1]) else { continue }
-            let word = parts[0..<(parts.count - 1)].joined(separator: " ").lowercased()
+            let word = Self.normalized(parts[0..<(parts.count - 1)].joined(separator: " "))
             // Keep the highest count when case-folding merges two entries.
             if n > counts[word, default: 0] { counts[word] = n }
             maxLen = max(maxLen, word.unicodeScalars.count)
@@ -32,12 +37,22 @@ public final class FrequencyDictionary: @unchecked Sendable {
         let total = letterCounts.values.reduce(0, +)
         self.alphabet = letterCounts.filter { Double($0.value) / Double(max(1, total)) > 0.0005 }
             .sorted { $0.value > $1.value }.map(\.key)
-        var entries: [String: Entry] = [:]
-        entries.reserveCapacity(counts.count)
-        for (i, word) in counts.keys.sorted(by: { counts[$0]! > counts[$1]! }).enumerated() {
-            entries[word] = Entry(count: Int32(clamping: counts[word]!), rank: Int32(i + 1))
+        // Ties broken by spelling so ranks, and every score, are the same on each run.
+        let byCount = counts.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }
+        var words = byCount.enumerated().map { (utf8: Array($0.element.key.utf8), count: $0.element.value, rank: $0.offset + 1) }
+        words.sort { $0.utf8.lexicographicallyPrecedes($1.utf8) }
+        var bytes: [UInt8] = []
+        bytes.reserveCapacity(words.reduce(0) { $0 + $1.utf8.count })
+        var offsets: [Int32] = [0]
+        offsets.reserveCapacity(words.count + 1)
+        for word in words {
+            bytes.append(contentsOf: word.utf8)
+            offsets.append(Int32(bytes.count))
         }
-        self.entries = entries
+        self.bytes = bytes
+        self.offsets = offsets
+        self.counts = words.map { Int32(clamping: $0.count) }
+        self.ranks = words.map { Int32($0.rank) }
         self.maxScalarLength = min(maxLen, 24)
     }
 
@@ -102,34 +117,73 @@ public final class FrequencyDictionary: @unchecked Sendable {
         return result
     }
 
-    public var isEmpty: Bool { entries.isEmpty }
+    public var isEmpty: Bool { counts.isEmpty }
 
-    public func count(of word: String) -> Int { entries[word.lowercased()].map { Int($0.count) } ?? 0 }
+    public func count(of word: String) -> Int { index(of: word).map { Int(counts[$0]) } ?? 0 }
 
     /// 0...1: 1 for the top word, falling with log rank to 0 at the end of the list; 0 if absent.
     public func commonness(of word: String) -> Double {
-        guard let rank = entries[word.lowercased()]?.rank, entries.count > 1 else { return 0 }
-        return 1 - log(Double(rank)) / log(Double(entries.count))
+        guard let i = index(of: word), counts.count > 1 else { return 0 }
+        return 1 - log(Double(ranks[i])) / log(Double(counts.count))
+    }
+
+    /// Lowercase NFC, the form entries are stored in. Typed text and word lists can differ
+    /// in normalization (é as one scalar or e + accent), which String == hides but bytes don't.
+    private static func normalized(_ word: String) -> String {
+        let lower = word.lowercased()
+        return lower.utf8.allSatisfy({ $0 < 0x80 }) ? lower : lower.precomposedStringWithCanonicalMapping
+    }
+
+    private func index(of word: String) -> Int? {
+        var key = Self.normalized(word)
+        return key.withUTF8 { index(of: UnsafeRawBufferPointer($0)) }
+    }
+
+    /// Binary search over the packed words.
+    private func index(of key: UnsafeRawBufferPointer) -> Int? {
+        bytes.withUnsafeBytes { buffer in
+            var low = 0, high = counts.count
+            while low < high {
+                let mid = (low + high) / 2
+                let start = Int(offsets[mid]), length = Int(offsets[mid + 1]) - start
+                let shared = min(length, key.count)
+                var order = shared == 0 ? 0 : memcmp(buffer.baseAddress! + start, key.baseAddress!, shared)
+                if order == 0 { order = length < key.count ? -1 : (length > key.count ? 1 : 0) }
+                if order == 0 { return mid }
+                if order < 0 { low = mid + 1 } else { high = mid }
+            }
+            return nil
+        }
     }
 
     /// Fraction of scalars covered by dictionary words (each at least two scalars long)
     /// in the best segmentation. Used for scripts written without spaces, such as Thai.
     public func segmentCoverage(_ text: String) -> Double {
-        let scalars = Array(text.unicodeScalars)
-        let n = scalars.count
+        let key = Self.normalized(text)
+        let utf8 = Array(key.utf8)
+        // starts[k]: byte offset of scalar k, so candidate pieces are byte slices, not new Strings.
+        var starts: [Int] = []
+        var offset = 0
+        for scalar in key.unicodeScalars {
+            starts.append(offset)
+            offset += UTF8.width(scalar)
+        }
+        starts.append(offset)
+        let n = starts.count - 1
         guard n > 0 else { return 0 }
         var best = [Int](repeating: 0, count: n + 1)
-        for i in 1...n {
-            best[i] = best[i - 1] // leave scalar i-1 uncovered
-            let lower = max(0, i - maxScalarLength)
-            var j = i - 2
-            while j >= lower {
-                var view = String.UnicodeScalarView()
-                view.append(contentsOf: scalars[j..<i])
-                if entries[String(view)] != nil {
-                    best[i] = max(best[i], best[j] + (i - j))
+        utf8.withUnsafeBytes { text in
+            for i in 1...n {
+                best[i] = best[i - 1] // leave scalar i-1 uncovered
+                let lower = max(0, i - maxScalarLength)
+                var j = i - 2
+                while j >= lower {
+                    let piece = UnsafeRawBufferPointer(rebasing: text[starts[j]..<starts[i]])
+                    if index(of: piece) != nil {
+                        best[i] = max(best[i], best[j] + (i - j))
+                    }
+                    j -= 1
                 }
-                j -= 1
             }
         }
         return Double(best[n]) / Double(n)

@@ -130,10 +130,14 @@ enabled layouts. Measured with `swift run -c release TypoCat --bench en th`:
 
 | Layouts enabled | Load time (background) | Memory (Activity Monitor) |
 |---|---|---|
-| English only | 0.1 s | 16 MB |
-| English + Russian | 0.4 s | 28 MB |
-| English + Thai | 0.9 s | 39 MB |
-| 7 languages | 3.2 s | 59 MB |
+| English only | 0.1 s | 15 MB |
+| English + Russian | 0.4 s | 19–23 MB |
+| English + Thai | 0.6–0.9 s | 19–21 MB |
+| 7 languages | 1.5 s | 25 MB |
+| All 16 languages | 2.2–2.7 s | 37–53 MB |
+
+Each word list is packed into one sorted byte buffer (about 1 MB per language)
+and looked up by binary search.
 
 When idle it uses no CPU: it reacts only to key presses. Electron apps (VS Code,
 Slack, Discord) are asked to expose their text fields to Accessibility so the

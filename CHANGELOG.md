@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Word lists use about a third of the memory: 7 languages at 25 MB instead of 59 MB, and they load faster. Detection results are unchanged.
+- Keys typed while a fix is being written are held and replayed in order.
+- Electron apps (VS Code and others) are asked to expose their text fields to Accessibility.
+- Ranks no longer depend on dictionary order, so `--eval` gives the same numbers on every run.
+
 ## 0.1.0 (2026-10-17)
 
 First open-source release. Build from source; no signed binary yet.
