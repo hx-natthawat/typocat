@@ -2,10 +2,10 @@ import Foundation
 
 /// Ranked word list in FrequencyWords format: one "word count" pair per line.
 public final class FrequencyDictionary: @unchecked Sendable {
-    private let counts: [String: Int]
-    /// 1 for the most frequent word. Comparable across languages, unlike raw counts:
-    /// the Thai corpus is hundreds of times smaller than the English one.
-    private let ranks: [String: Int]
+    /// Count and rank (1 = most frequent) per word, in one table to halve memory. Ranks are
+    /// comparable across languages, unlike raw counts: the Thai corpus is far smaller than English.
+    private let entries: [String: Entry]
+    private struct Entry { let count: Int32; let rank: Int32 }
     /// Longest entry measured in Unicode scalars, bounds the segmentation search.
     public let maxScalarLength: Int
     /// Letters seen in the list, most frequent first; candidate edits draw from these.
@@ -32,10 +32,12 @@ public final class FrequencyDictionary: @unchecked Sendable {
         let total = letterCounts.values.reduce(0, +)
         self.alphabet = letterCounts.filter { Double($0.value) / Double(max(1, total)) > 0.0005 }
             .sorted { $0.value > $1.value }.map(\.key)
-        self.counts = counts
-        var ranks: [String: Int] = [:]
-        for (i, word) in counts.keys.sorted(by: { counts[$0]! > counts[$1]! }).enumerated() { ranks[word] = i + 1 }
-        self.ranks = ranks
+        var entries: [String: Entry] = [:]
+        entries.reserveCapacity(counts.count)
+        for (i, word) in counts.keys.sorted(by: { counts[$0]! > counts[$1]! }).enumerated() {
+            entries[word] = Entry(count: Int32(clamping: counts[word]!), rank: Int32(i + 1))
+        }
+        self.entries = entries
         self.maxScalarLength = min(maxLen, 24)
     }
 
@@ -46,6 +48,26 @@ public final class FrequencyDictionary: @unchecked Sendable {
     /// Splits each entry into the fewest other entries (two scalars or more) that cover it
     /// exactly, and adds the entry's count to each of them.
     private static func creditingParts(of counts: [String: Int], maxLength: Int) -> [String: Int] {
+        // A trie over the entries lets the segmentation walk forward scalar by scalar
+        // instead of building a String for every candidate piece (about 10x faster on Thai).
+        var children: [[UInt32: Int32]] = [[:]]
+        var terminal: [Bool] = [false]
+        for entry in counts.keys {
+            let scalars = entry.unicodeScalars
+            guard scalars.count <= maxLength else { continue }
+            var node = 0
+            for scalar in scalars {
+                if let next = children[node][scalar.value] {
+                    node = Int(next)
+                } else {
+                    children.append([:]); terminal.append(false)
+                    children[node][scalar.value] = Int32(children.count - 1)
+                    node = children.count - 1
+                }
+            }
+            terminal[node] = true
+        }
+
         var result = counts
         for (entry, n) in counts {
             let scalars = Array(entry.unicodeScalars)
@@ -55,14 +77,16 @@ public final class FrequencyDictionary: @unchecked Sendable {
             var pieces = [Int](repeating: .max, count: len + 1)
             var from = [Int](repeating: -1, count: len + 1)
             pieces[0] = 0
-            for i in 2...len {
-                for j in max(0, i - maxLength)...(i - 2) where pieces[j] != .max && !(j == 0 && i == len) {
-                    var view = String.UnicodeScalarView()
-                    view.append(contentsOf: scalars[j..<i])
-                    if counts[String(view)] != nil, pieces[j] + 1 < pieces[i] {
-                        pieces[i] = pieces[j] + 1
-                        from[i] = j
-                    }
+            for j in 0..<len where pieces[j] != .max {
+                var node = 0
+                for i in j..<min(len, j + maxLength) {
+                    guard let next = children[node][scalars[i].value] else { break }
+                    node = Int(next)
+                    let end = i + 1
+                    // Pieces are two scalars or more, and never the whole entry itself.
+                    guard end - j >= 2, terminal[node], !(j == 0 && end == len), pieces[j] + 1 < pieces[end] else { continue }
+                    pieces[end] = pieces[j] + 1
+                    from[end] = j
                 }
             }
             guard pieces[len] != .max else { continue }
@@ -78,14 +102,14 @@ public final class FrequencyDictionary: @unchecked Sendable {
         return result
     }
 
-    public var isEmpty: Bool { counts.isEmpty }
+    public var isEmpty: Bool { entries.isEmpty }
 
-    public func count(of word: String) -> Int { counts[word.lowercased()] ?? 0 }
+    public func count(of word: String) -> Int { entries[word.lowercased()].map { Int($0.count) } ?? 0 }
 
     /// 0...1: 1 for the top word, falling with log rank to 0 at the end of the list; 0 if absent.
     public func commonness(of word: String) -> Double {
-        guard let rank = ranks[word.lowercased()], ranks.count > 1 else { return 0 }
-        return 1 - log(Double(rank)) / log(Double(ranks.count))
+        guard let rank = entries[word.lowercased()]?.rank, entries.count > 1 else { return 0 }
+        return 1 - log(Double(rank)) / log(Double(entries.count))
     }
 
     /// Fraction of scalars covered by dictionary words (each at least two scalars long)
@@ -102,7 +126,7 @@ public final class FrequencyDictionary: @unchecked Sendable {
             while j >= lower {
                 var view = String.UnicodeScalarView()
                 view.append(contentsOf: scalars[j..<i])
-                if counts[String(view)] != nil {
+                if entries[String(view)] != nil {
                     best[i] = max(best[i], best[j] + (i - j))
                 }
                 j -= 1

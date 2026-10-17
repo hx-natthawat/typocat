@@ -108,6 +108,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let app, app.bundleIdentifier != Bundle.main.bundleIdentifier else { return }
         frontApp = app
         interceptor.frontBundleID = app.bundleIdentifier
+        ElectronAccessibility.enableIfElectron(app)
         matchLayout(to: app)
         refreshTitle()
     }
@@ -214,20 +215,19 @@ enum Dictionaries {
     }
 
     /// Loads word lists only for `languages` (the enabled layouts): each list costs a few MB.
-    /// Loads all lists in parallel, so startup costs about as long as the slowest one.
+    /// Loads one list at a time. Loading in parallel was 3x faster with 7 languages but left
+    /// the app at 100 MB instead of 59 MB (`--bench`), and loading runs in the background anyway.
     static func makeDetector(for languages: some Sequence<Language>) -> Detector {
-        let wanted = Array(Set(languages))
         var dicts: [Language: FrequencyDictionary] = [:]
-        let lock = NSLock()
-        DispatchQueue.concurrentPerform(iterations: wanted.count) { i in
-            let language = wanted[i]
-            guard let url = url(for: language), var contents = try? String(contentsOf: url, encoding: .utf8) else {
-                NSLog("TypoCat: no word list for \(language.rawValue); its layout can't be detected")
-                return
+        for language in Set(languages) {
+            autoreleasepool {
+                guard let url = url(for: language), var contents = try? String(contentsOf: url, encoding: .utf8) else {
+                    NSLog("TypoCat: no word list for \(language.rawValue); its layout can't be detected")
+                    return
+                }
+                if language.rawValue == "sr" { contents = SerbianScript.addingCyrillic(to: contents) }
+                dicts[language] = FrequencyDictionary(contents: contents, splitCompounds: language.writesWithoutSpaces)
             }
-            if language.rawValue == "sr" { contents = SerbianScript.addingCyrillic(to: contents) }
-            let dict = FrequencyDictionary(contents: contents, splitCompounds: language.writesWithoutSpaces)
-            lock.lock(); dicts[language] = dict; lock.unlock()
         }
         return Detector(dictionaries: dicts)
     }

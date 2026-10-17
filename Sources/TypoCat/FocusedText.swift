@@ -1,4 +1,4 @@
-import ApplicationServices
+import AppKit
 
 /// Reads the text just before the caret in the focused field through the
 /// Accessibility API, so a rewrite only happens when the field really holds
@@ -49,5 +49,25 @@ enum FocusedText {
               let end = utf16.index(utf16.startIndex, offsetBy: range.location, limitedBy: utf16.endIndex),
               let caret = end.samePosition(in: text) else { return nil }
         return String(text[..<caret])
+    }
+}
+
+/// Electron apps (VS Code, Slack, Discord…) build their accessibility tree only for
+/// screen readers. Setting AXManualAccessibility asks them to build it anyway, so the
+/// field check above can read their text fields. Chromium browsers have a similar
+/// switch (AXEnhancedUserInterface), but it breaks window animations and window
+/// managers, so it is left alone.
+enum ElectronAccessibility {
+    private static var enabled: Set<pid_t> = []
+
+    static func enableIfElectron(_ app: NSRunningApplication) {
+        let pid = app.processIdentifier
+        guard !enabled.contains(pid), let url = app.bundleURL,
+              FileManager.default.fileExists(atPath: url.appendingPathComponent("Contents/Frameworks/Electron Framework.framework").path)
+        else { return }
+        enabled.insert(pid)
+        let element = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(element, 0.2)
+        AXUIElementSetAttributeValue(element, "AXManualAccessibility" as CFString, kCFBooleanTrue)
     }
 }

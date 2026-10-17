@@ -59,9 +59,12 @@ public struct LayoutMap: Sendable {
     /// Single keys and dead-key pairs that type `text`, for tests and evaluation.
     public func inverse() -> [String: [KeyStroke]] {
         var out: [String: [KeyStroke]] = [:]
-        for (stroke, s) in forward where out[s] == nil || out[s]!.count > 1 { out[s] = [stroke] }
-        for (dead, follow) in deadKeys {
-            for (next, s) in follow where out[s] == nil { out[s] = [dead, next] }
+        // Sorted so the same text always maps to the same keys (dictionary order varies per run).
+        let order: (KeyStroke, KeyStroke) -> Bool = { ($0.keyCode, $0.shift ? 1 : 0) < ($1.keyCode, $1.shift ? 1 : 0) }
+        for stroke in forward.keys.sorted(by: order) where out[forward[stroke]!] == nil { out[forward[stroke]!] = [stroke] }
+        for dead in deadKeys.keys.sorted(by: order) {
+            let follow = deadKeys[dead]!
+            for next in follow.keys.sorted(by: order) where out[follow[next]!] == nil { out[follow[next]!] = [dead, next] }
         }
         return out
     }

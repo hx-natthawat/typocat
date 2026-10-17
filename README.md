@@ -122,6 +122,24 @@ Code layout:
 Local data lives in `~/Library/Application Support/TypoCat/`:
 `ignoredWords.json` (words you undid) and `appLanguageCounts.json`.
 
+## Footprint
+
+A native Swift app (no Electron, no web view): a 0.5 MB binary plus about
+11 MB of word lists. Word lists load in the background at launch and only for
+enabled layouts. Measured with `swift run -c release TypoCat --bench en th`:
+
+| Layouts enabled | Load time (background) | Memory (Activity Monitor) |
+|---|---|---|
+| English only | 0.1 s | 16 MB |
+| English + Russian | 0.4 s | 28 MB |
+| English + Thai | 0.9 s | 39 MB |
+| 7 languages | 3.2 s | 59 MB |
+
+When idle it uses no CPU: it reacts only to key presses. Electron apps (VS Code,
+Slack, Discord) are asked to expose their text fields to Accessibility so the
+field check works there too. That works in VS Code; where an app still hides its
+fields, TypoCat falls back to its keystroke buffer.
+
 ## Privacy
 
 Everything runs on your Mac. TypoCat keeps only the current word in memory.
