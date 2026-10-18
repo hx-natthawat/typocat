@@ -29,7 +29,30 @@ enum FocusedText {
     /// starts with a tone mark that joins the space into one Character, so String.hasSuffix fails.
     static func endsWith(_ text: String, _ word: String, ignoringLast trailing: Int = 0) -> Bool {
         let scalars = Array(text.unicodeScalars.dropLast(trailing))
-        return scalars.count >= word.unicodeScalars.count && scalars.suffix(word.unicodeScalars.count).elementsEqual(word.unicodeScalars)
+        if scalars.count >= word.unicodeScalars.count && scalars.suffix(word.unicodeScalars.count).elementsEqual(word.unicodeScalars) {
+            return true
+        }
+        // zsh shows a combining mark with no letter before it as its code: ้ำสสน reads "<0e49>ำสสน".
+        let decoded = decodingShellEscapes(text)
+        return decoded != text && endsWith(decoded, word, ignoringLast: trailing)
+    }
+
+    private static let shellEscape = try! NSRegularExpression(pattern: "<([0-9a-fA-F]{4,6})>")
+
+    /// Turns zsh's "<0e49>" placeholders back into the characters they stand for.
+    static func decodingShellEscapes(_ text: String) -> String {
+        guard text.contains("<") else { return text }
+        let ns = text as NSString
+        var out = ""
+        var last = 0
+        for match in shellEscape.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
+            guard let value = UInt32(ns.substring(with: match.range(at: 1)), radix: 16),
+                  let scalar = Unicode.Scalar(value) else { continue }
+            out += ns.substring(with: NSRange(location: last, length: match.range.location - last))
+            out.unicodeScalars.append(scalar)
+            last = match.range.location + match.range.length
+        }
+        return out + ns.substring(from: last)
     }
 
     /// Text from the start of the field up to the caret, or nil when the
@@ -55,6 +78,9 @@ enum FocusedText {
               let rangeValue, CFGetTypeID(rangeValue) == AXValueGetTypeID() else { return nil }
         var range = CFRange()
         guard AXValueGetValue(rangeValue as! AXValue, .cfRange, &range), range.length == 0 else { return nil }
+        // We only ask right after a word was typed, so a caret at the very start is wrong:
+        // Ghostty always reports 0. Treat it as unreadable rather than as a mismatch.
+        guard range.location > 0 else { return nil }
 
         // AX ranges count UTF-16 units.
         let utf16 = text.utf16

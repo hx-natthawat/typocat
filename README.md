@@ -65,8 +65,9 @@ Layouts that are input methods (Japanese, Chinese, Korean) have no key map and
 aren't supported.
 
 The build is ad-hoc signed by default, so macOS drops Accessibility access
-after each rebuild. To keep it, sign with a stable certificate:
-`SIGN_IDENTITY="Your Cert Name" ./scripts/build-app.sh`. If corrections stop, remove TypoCat from
+after each rebuild. To keep it, run `./scripts/make-signing-cert.sh` once: it
+creates a local certificate that `build-app.sh` then signs with (or set
+`SIGN_IDENTITY="Your Cert Name"`). If corrections stop, remove TypoCat from
 System Settings → Privacy & Security → Accessibility and add it again.
 
 ## Install on another Mac

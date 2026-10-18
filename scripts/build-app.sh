@@ -1,7 +1,8 @@
 #!/bin/bash
 # Builds build/TypoCat.app (menu-bar agent).
-# Set SIGN_IDENTITY to a code-signing certificate name to keep Accessibility
-# access across rebuilds; the default ad-hoc signature changes every build.
+# Signs with SIGN_IDENTITY, else "TypoCat Local Signing" if
+# ./scripts/make-signing-cert.sh created it, else ad-hoc. Ad-hoc signatures change
+# every build, so macOS drops Accessibility access after each rebuild.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -31,5 +32,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 </dict>
 </plist>
 PLIST
+if [ -z "${SIGN_IDENTITY:-}" ] && security find-certificate -c "TypoCat Local Signing" >/dev/null 2>&1; then
+  SIGN_IDENTITY="TypoCat Local Signing"
+fi
 codesign --force --sign "${SIGN_IDENTITY:--}" "$APP"
 echo "Built $APP"
