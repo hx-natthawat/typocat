@@ -6,10 +6,13 @@ import TypoCatCore
 final class InputSources {
     private(set) var layouts: [Language: LayoutMap] = [:]
     private var sources: [Language: TISInputSource] = [:]
+    /// Each enabled layout's name as System Settings shows it ("Thai", "ABC").
+    private(set) var names: [Language: String] = [:]
 
     func reload() {
         layouts = [:]
         sources = [:]
+        names = [:]
         let filter = [
             kTISPropertyInputSourceCategory as String: kTISCategoryKeyboardInputSource as String,
             kTISPropertyInputSourceIsSelectCapable as String: true,
@@ -20,6 +23,7 @@ final class InputSources {
                   let map = Self.buildMap(source: source, language: language) else { continue }
             sources[language] = source
             layouts[language] = map
+            names[language] = Self.property(source, kTISPropertyLocalizedName) ?? language.shortName
         }
     }
 

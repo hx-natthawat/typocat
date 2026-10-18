@@ -12,7 +12,7 @@ APP=build/TypoCat.app
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp .build/release/TypoCat "$APP/Contents/MacOS/"
-cp Data/*_50k.txt Resources/AppIcon.icns "$APP/Contents/Resources/"
+cp Data/*_50k.txt Resources/AppIcon.icns Resources/Manee.png "$APP/Contents/Resources/"
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

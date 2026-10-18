@@ -21,6 +21,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var permissionTimer: Timer?
     /// Languages of the enabled layouts the current detector was built for.
     private var loadedLanguages: Set<Language> = []
+    private let setup = SetupModel()
+    private lazy var setupWindow = SetupWindowController(model: setup)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         inputSources.reload()
@@ -29,12 +31,58 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                   inputSources: inputSources, store: store)
         interceptor.onCorrection = { [weak self] c in
             self?.lastCorrectionItem.title = "Last: \(c.original) → \(c.replacement)"
+            self?.setup.lastFix = "\(c.original) → \(c.replacement)"
         }
         buildMenu()
+        configureSetup()
         reloadLayouts()
         observeSystem()
         setFrontApp(NSWorkspace.shared.frontmostApplication)
         startWhenTrusted()
+        if !UserDefaults.standard.bool(forKey: "setupDone") || !setup.trusted { setupWindow.show() }
+    }
+
+    // MARK: - Setup window
+
+    private func configureSetup() {
+        setup.openAtLogin = SMAppService.mainApp.status == .enabled
+        setup.fixTypos = store.fixTypos
+        setup.matchLayout = store.matchLayoutPerApp
+        setup.setOpenAtLogin = { [weak self] on in
+            if (SMAppService.mainApp.status == .enabled) != on { self?.toggleOpenAtLogin() }
+        }
+        setup.setFixTypos = { [weak self] on in
+            if self?.store.fixTypos != on { self?.toggleFixTypos() }
+        }
+        setup.setMatchLayout = { [weak self] on in
+            if self?.store.matchLayoutPerApp != on { self?.toggleMatchLayout() }
+        }
+        setup.done = { [weak self] in
+            if self?.setup.trusted == true { UserDefaults.standard.set(true, forKey: "setupDone") }
+            self?.setupWindow.close()
+        }
+    }
+
+    @objc private func showSetup() { setupWindow.show() }
+
+    /// The enabled layouts, and "hello" as it comes out on one that isn't English.
+    private func refreshSetupLayouts() {
+        let layouts = inputSources.layouts
+        setup.layouts = layouts.keys.sorted { ($0 == .english ? 0 : 1, $0.rawValue) < ($1 == .english ? 0 : 1, $1.rawValue) }.map {
+            SetupModel.Layout(language: $0, name: inputSources.names[$0] ?? $0.shortName,
+                              hasWordList: Dictionaries.url(for: $0) != nil)
+        }
+        let others = setup.layouts.filter { $0.language != .english && $0.hasWordList }
+        let other = others.first { $0.language == inputSources.currentLanguage() } ?? others.first
+        guard let other, let english = layouts[.english], let target = layouts[other.language] else {
+            setup.example = nil
+            return
+        }
+        let keys = english.inverse()
+        let word = "hello"
+        let strokes = word.compactMap { keys[String($0)] }.flatMap { $0 }
+        guard strokes.count == word.count, let typed = target.render(strokes) else { setup.example = nil; return }
+        setup.example = (word, typed, other.name)
     }
 
     // MARK: - Permissions
@@ -43,6 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
         if AXIsProcessTrustedWithOptions(options), interceptor.start() {
             permissionItem.isHidden = true
+            setup.trusted = true
             return
         }
         permissionItem.title = "Grant Accessibility access…"
@@ -51,6 +100,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self, AXIsProcessTrusted(), self.interceptor.start() else { return }
             timer.invalidate()
             self.permissionItem.isHidden = true
+            self.setup.trusted = true
         }
     }
 
@@ -88,6 +138,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hint.isEnabled = false
         menu.addItem(hint)
         menu.addItem(.separator())
+        let setupItem = NSMenuItem(title: "Setup…", action: #selector(showSetup), keyEquivalent: "")
+        setupItem.target = self
+        menu.addItem(setupItem)
         let about = NSMenuItem(title: "About TypoCat", action: #selector(showAbout), keyEquivalent: "")
         about.target = self
         menu.addItem(about)
@@ -108,7 +161,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func setFrontApp(_ app: NSRunningApplication?) {
-        guard let app, app.bundleIdentifier != Bundle.main.bundleIdentifier else { return }
+        guard let app else { return }
+        // Our setup window: typing there counts for us, but the menu keeps naming the last other app.
+        guard app.bundleIdentifier != Bundle.main.bundleIdentifier else {
+            interceptor.frontBundleID = app.bundleIdentifier
+            return
+        }
         frontApp = app
         interceptor.frontBundleID = app.bundleIdentifier
         ElectronAccessibility.enableIfElectron(app)
@@ -127,6 +185,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func toggleMatchLayout() {
         store.matchLayoutPerApp.toggle()
         matchLayoutItem.state = store.matchLayoutPerApp ? .on : .off
+        setup.matchLayout = store.matchLayoutPerApp
     }
 
     /// Credits include the word lists' CC BY-SA attribution, which redistribution requires.
@@ -148,6 +207,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func toggleFixTypos() {
         store.fixTypos.toggle()
         typoItem.state = store.fixTypos ? .on : .off
+        setup.fixTypos = store.fixTypos
     }
 
     @objc private func toggleOpenAtLogin() {
@@ -158,6 +218,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSLog("TypoCat: open at login failed: \(error.localizedDescription)")
         }
         loginItem.state = service.status == .enabled ? .on : .off
+        setup.openAtLogin = service.status == .enabled
     }
 
     @objc private func toggleExcludeFrontApp() {
@@ -177,6 +238,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Picks up layouts the user enabled or removed, loading word lists off the main thread.
     private func reloadLayouts() {
         inputSources.reload()
+        refreshSetupLayouts()
         let languages = Set(inputSources.layouts.keys)
         guard languages != loadedLanguages else { return }
         loadedLanguages = languages
@@ -193,6 +255,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         distributed.addObserver(forName: Notification.Name(kTISNotifySelectedKeyboardInputSourceChanged as String),
                                 object: nil, queue: .main) { [weak self] _ in
             self?.refreshTitle()
+            self?.refreshSetupLayouts()
         }
         distributed.addObserver(forName: Notification.Name(kTISNotifyEnabledKeyboardInputSourcesChanged as String),
                                 object: nil, queue: .main) { [weak self] _ in

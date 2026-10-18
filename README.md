@@ -69,6 +69,18 @@ after each rebuild. To keep it, sign with a stable certificate:
 `SIGN_IDENTITY="Your Cert Name" ./scripts/build-app.sh`. If corrections stop, remove TypoCat from
 System Settings → Privacy & Security → Accessibility and add it again.
 
+## Install on another Mac
+
+```bash
+./scripts/build-app.sh && ./scripts/make-dmg.sh   # builds build/TypoCat.dmg
+```
+
+Copy `TypoCat.dmg` to the other Mac (AirDrop, USB, a chat app), open it and drag
+TypoCat into Applications. The build isn't notarized, so the first time you open it
+macOS says it can't check it for malware: open System Settings → Privacy & Security
+and click Open Anyway. The setup window then walks through Accessibility access,
+your keyboards and a test field. Open it again any time from the menu: Setup….
+
 ## Using it
 
 - **Fixing a word:** type it on the wrong layout and press Space, Return or Tab. The word is retyped on the right layout, and the keyboard switches to that layout.

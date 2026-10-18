@@ -35,6 +35,12 @@ enum FocusedText {
     /// Text from the start of the field up to the caret, or nil when the
     /// field is unreadable or has a non-empty selection.
     static func textBeforeCaret() -> String? {
+        // Our own setup window: asking ourselves through AX from the main thread would stall.
+        if NSApp.isActive {
+            guard let editor = NSApp.keyWindow?.firstResponder as? NSTextView,
+                  editor.selectedRange().length == 0 else { return nil }
+            return (editor.string as NSString).substring(to: editor.selectedRange().location)
+        }
         var focused: CFTypeRef?
         guard AXUIElementCopyAttributeValue(systemWide, kAXFocusedUIElementAttribute as CFString, &focused) == .success,
               let focused, CFGetTypeID(focused) == AXUIElementGetTypeID() else { return nil }
