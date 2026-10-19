@@ -126,7 +126,13 @@ public final class Detector: @unchecked Sendable {
                 && (Self.coreLength(alt) < Self.coreLength(typed) || Self.hasUnusualPunctuation(alt)) { continue }
             let s = score(alt, as: language)
             let lettersOnly = punctuated && alt.unicodeScalars.allSatisfy(Self.isWordScalar)
-            let wins = beats(s, typed: lettersOnly ? typedScore * strippedPunctuationWeight : typedScore)
+            // Ordinary punctuation can be letters too: Finnish "työ" is "ty;" on US, "älä" is "'l'".
+            // Then the typed word is only its shorter core, so beating it is enough: no margin.
+            // ("to;" stays: "to" is more common in English than "tom" is in French.) Not into Thai and
+            // other spaceless scripts, where nearly any run reads as words ('today' would change).
+            let lettersInstead = !punctuated && !language.writesWithoutSpaces && s > typedScore && alt.unicodeScalars.allSatisfy(Self.isWordScalar)
+                && Self.letterCoreLength(alt) > Self.letterCoreLength(typed)
+            let wins = beats(s, typed: lettersOnly || lettersInstead ? typedScore * strippedPunctuationWeight : typedScore)
             if best == nil || s > best!.1 {
                 best = (Correction(original: typed, replacement: alt, from: current, to: language), s, wins)
             }
@@ -191,6 +197,11 @@ public final class Detector: @unchecked Sendable {
 
     /// Scalars left once edge punctuation is trimmed.
     static func coreLength(_ text: String) -> Int { text.trimmingCharacters(in: edgePunctuation).unicodeScalars.count }
+
+    /// Scalars left once edge punctuation and quotes are trimmed: 'l' is one.
+    static func letterCoreLength(_ text: String) -> Int {
+        text.trimmingCharacters(in: edgePunctuation.union(quotes)).unicodeScalars.count
+    }
 
     /// A quote with no partner ('nj is это on Russian) is more likely a letter key.
     static func hasUnpairedQuote(_ typed: String) -> Bool {

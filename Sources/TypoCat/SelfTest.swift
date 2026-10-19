@@ -30,7 +30,7 @@ enum SelfTest {
             ("გამარჯობა", "ka", "en", true), ("շնորհակալություն", "hy", "en", true),
             // Latin layouts that move letters: AZERTY, QWERTZ, umlauts on punctuation keys.
             ("maison", "fr", "en", true), ("für", "de", "en", true), ("yes", "en", "de", true),
-            ("señor", "es", "en", true), ("hyvä", "fi", "en", true),
+            ("señor", "es", "en", true), ("hyvä", "fi", "en", true), ("työ", "fi", "en", true), ("domů", "cs", "en", true),
             // A second layout for the same language: Dvorak or Colemak next to QWERTY.
             ("hello", "en+dvorak", "en", true), ("people", "en", "en+dvorak", true), ("meeting", "en+colemak", "en", true),
             // From Data/extra: everyday words the subtitle lists lack.

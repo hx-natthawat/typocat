@@ -210,6 +210,22 @@ final class TypoCatCoreTests: XCTestCase {
         XCTAssertEqual(fix?.to, .english)
     }
 
+    func testPunctuationKeysThatTypeLetters() {
+        // Keys 0...3 type t y o ; on US and t y o ö on Finnish: "työ" typed on US reads "ty;".
+        func map(_ letters: [String], _ language: Language) -> LayoutMap {
+            var forward: [KeyStroke: String] = [:]
+            for (i, s) in letters.enumerated() { forward[KeyStroke(keyCode: UInt16(i), shift: false)] = s }
+            return LayoutMap(language: language, inputSourceID: "test.\(language)", forward: forward)
+        }
+        let fi = Language(rawValue: "fi")
+        let pair = [Language.english: map(["t", "y", "o", ";"], .english), fi: map(["t", "y", "o", "ö"], fi)]
+        let d = Detector(dictionaries: [.english: FrequencyDictionary(contents: "to 9000\nty 20\n"),
+                                        fi: FrequencyDictionary(contents: "työ 900\ntoö 10\n")])
+        XCTAssertEqual(d.decide(strokes: strokes([0, 1, 3]), typed: "ty;", current: .english, layouts: pair)?.replacement, "työ")
+        // A common English word with ordinary punctuation stays, even next to a rarer word there.
+        XCTAssertNil(d.decide(strokes: strokes([0, 2, 3]), typed: "to;", current: .english, layouts: pair))
+    }
+
     func testLearnedWordsCount() {
         let d = detector()
         let keys = strokes([3, 4, 5]) // o w r on "en", щ ц к on "ru"

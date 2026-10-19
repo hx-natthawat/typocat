@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Better detection
+- Punctuation keys that type letters on the other layout: Finnish `ty;` → työ, Czech `dom;` → domů, Hungarian `kiss;` → kissé, Finnish `'l'` → älä. Fixed on Finnish 99.2% → 99.8%, Danish 99.1% → 99.7%, Italian 98.0% → 98.8%, Hebrew 94.3% → 95.6%; correct text changed stays the same.
+
 ## 0.3.0 (2026-10-19)
 
 ### New
