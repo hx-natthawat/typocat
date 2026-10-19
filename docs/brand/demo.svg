@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="220" viewBox="0 0 720 220" role="img" aria-labelledby="t">
+  <title id="t">TypoCat fixing words typed on the wrong keyboard: ghbdtn becomes привет, l;ylfu becomes สวัสดี, akuo becomes שלום, руддщ becomes hello</title>
+  <!-- Four examples, 3 s each, looping. Each group uses the same keyframes with its own delay.
+       Within a group's 25% slice: keys appear one by one, Space is pressed, the word is replaced. -->
+  <style>
+    .card { fill: #142220; }
+    .field { fill: #1E302D; stroke: #2C4743; stroke-width: 1.5; }
+    .label { font: 600 13px -apple-system, "Segoe UI", Roboto, sans-serif; fill: #9DB3AE; letter-spacing: .4px; }
+    .typed { font: 500 34px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #F0866A; }
+    .fixed { font: 600 34px -apple-system, "Segoe UI", "Noto Sans", "Noto Sans Thai", "Noto Sans Hebrew", sans-serif; fill: #EEF2EE; }
+    .note { font: 500 14px -apple-system, "Segoe UI", Roboto, sans-serif; fill: #4CC3B9; }
+    .key { font: 600 12px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #142220; }
+    .g { opacity: 0; animation: show 12s infinite; }
+    .cover { animation: type 12s infinite; }
+    .typedText { animation: typedOut 12s infinite; }
+    .after { opacity: 0; animation: fixedIn 12s infinite; }
+    .space { opacity: 0; animation: press 12s infinite; }
+    .g2, .g2 * { animation-delay: 3s; }
+    .g3, .g3 * { animation-delay: 6s; }
+    .g4, .g4 * { animation-delay: 9s; }
+    @keyframes show { 0% { opacity: 0 } 0.5%, 24.5% { opacity: 1 } 25%, 100% { opacity: 0 } }
+    @keyframes typedOut { 0%, 15% { opacity: 1 } 16%, 100% { opacity: 0 } }
+    @keyframes fixedIn { 0%, 15.5% { opacity: 0 } 17%, 24.5% { opacity: 1 } 25%, 100% { opacity: 0 } }
+    @keyframes press { 0%, 13% { opacity: 0 } 13.5%, 16% { opacity: 1 } 17%, 100% { opacity: 0 } }
+    @media (prefers-reduced-motion: reduce) {
+      .g, .cover, .typedText, .after, .space { animation: none; }
+      .g1 { opacity: 1; } .g1 .typedText { opacity: 0; } .g1 .after { opacity: 1; }
+    }
+  </style>
+  <rect class="card" width="720" height="220" rx="22"/>
+
+  <!-- Manee's head, like the menu-bar glyph. -->
+  <g transform="translate(40 34) scale(.44)" fill="#F2A12B">
+    <path d="M10 52 Q4 10 16 4 Q26 0 46 26 Z M90 52 Q96 10 84 4 Q74 0 54 26 Z"/>
+    <ellipse cx="50" cy="59" rx="48" ry="39"/>
+    <ellipse cx="32" cy="58" rx="10" ry="12" fill="#142220"/>
+    <ellipse cx="68" cy="58" rx="10" ry="12" fill="#142220"/>
+  </g>
+  <text x="96" y="62" style="font: 700 22px -apple-system, 'Segoe UI', Roboto, sans-serif" fill="#EEF2EE">Typo<tspan fill="#F2A12B">Cat</tspan></text>
+
+  <rect class="field" x="40" y="92" width="640" height="72" rx="14"/>
+  <clipPath id="inField"><rect x="42" y="94" width="636" height="68" rx="13"/></clipPath>
+
+  <!-- n keys at 20.5 px each (34 px monospace). The cover slides right one key at a time. -->
+  <g class="g g1">
+    <text class="label" x="680" y="62" text-anchor="end">RUSSIAN, TYPED ON ENGLISH</text>
+    <g class="typedText" clip-path="url(#inField)">
+      <text class="typed" x="64" y="140">ghbdtn</text>
+      <rect class="cover" x="62" y="100" width="560" height="56" fill="#1E302D" style="animation-timing-function: steps(6, end); --w: 123px"/>
+    </g>
+    <text class="fixed after" x="64" y="140">привет</text>
+    <text class="note after" x="64" y="192">✓ fixed, keyboard switched to Russian</text>
+  </g>
+  <g class="g g2">
+    <text class="label" x="680" y="62" text-anchor="end">THAI, TYPED ON ENGLISH</text>
+    <g class="typedText" clip-path="url(#inField)">
+      <text class="typed" x="64" y="140">l;ylfu</text>
+      <rect class="cover" x="62" y="100" width="560" height="56" fill="#1E302D" style="animation-timing-function: steps(6, end); --w: 123px"/>
+    </g>
+    <text class="fixed after" x="64" y="140">สวัสดี</text>
+    <text class="note after" x="64" y="192">✓ fixed, keyboard switched to Thai</text>
+  </g>
+  <g class="g g3">
+    <text class="label" x="680" y="62" text-anchor="end">HEBREW, TYPED ON ENGLISH</text>
+    <g class="typedText" clip-path="url(#inField)">
+      <text class="typed" x="64" y="140">akuo</text>
+      <rect class="cover" x="62" y="100" width="560" height="56" fill="#1E302D" style="animation-timing-function: steps(4, end); --w: 82px"/>
+    </g>
+    <text class="fixed after" x="64" y="140">שלום</text>
+    <text class="note after" x="64" y="192">✓ fixed, keyboard switched to Hebrew</text>
+  </g>
+  <g class="g g4">
+    <text class="label" x="680" y="62" text-anchor="end">ENGLISH, TYPED ON RUSSIAN</text>
+    <g class="typedText" clip-path="url(#inField)">
+      <text class="typed" x="64" y="140">руддщ</text>
+      <rect class="cover" x="62" y="100" width="560" height="56" fill="#1E302D" style="animation-timing-function: steps(5, end); --w: 103px"/>
+    </g>
+    <text class="fixed after" x="64" y="140">hello</text>
+    <text class="note after" x="64" y="192">✓ fixed, keyboard switched to English</text>
+  </g>
+
+  <!-- The Space key, shown when it's pressed. -->
+  <g class="space">
+    <rect x="560" y="110" width="100" height="36" rx="8" fill="#F2A12B"/>
+    <text class="key" x="610" y="133" text-anchor="middle">space</text>
+  </g>
+  <g class="space g2"><rect x="560" y="110" width="100" height="36" rx="8" fill="#F2A12B"/><text class="key" x="610" y="133" text-anchor="middle">space</text></g>
+  <g class="space g3"><rect x="560" y="110" width="100" height="36" rx="8" fill="#F2A12B"/><text class="key" x="610" y="133" text-anchor="middle">space</text></g>
+  <g class="space g4"><rect x="560" y="110" width="100" height="36" rx="8" fill="#F2A12B"/><text class="key" x="610" y="133" text-anchor="middle">space</text></g>
+
+  <style>
+    /* Typing: the cover moves from the text's start to just past its last key. */
+    @keyframes type { 0%, 1% { transform: translateX(0) } 12% { transform: translateX(var(--w)) } 12.01%, 100% { transform: translateX(var(--w)) } }
+  </style>
+</svg>

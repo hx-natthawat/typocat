@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- README animation (`docs/brand/demo.svg`) showing four fixes.
+- Setup window: darker text on marigold and light-teal fills, readable in light and dark mode.
 - Setup window on first launch (and from the menu, Setup…): Accessibility permission with live status, your keyboards, a field to try a fix, and the main options.
 - Releases: pushing a `v*` tag builds `TypoCat.dmg` on GitHub Actions and attaches it to a release. Check for Updates… in the menu compares your version with the latest release (the app's only network request, and only when you ask).
 - `scripts/make-signing-cert.sh` creates a local signing certificate; `build-app.sh` uses it, so Accessibility access survives rebuilds and updates.

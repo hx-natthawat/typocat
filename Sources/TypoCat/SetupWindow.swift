@@ -56,6 +56,10 @@ private enum Brand {
         NSColor(srgbRed: CGFloat(v >> 16 & 255) / 255, green: CGFloat(v >> 8 & 255) / 255, blue: CGFloat(v & 255) / 255, alpha: 1)
     }
     static let lagoon = color(0x0B7A75, 0x4CC3B9)
+    /// Text on lagoon fills: white on the dark teal, ink on the light one.
+    static let onLagoon = color(0xFFFFFF, 0x142220)
+    /// White on marigold is too faint to read, in either mode.
+    static let onMarigold = Color(rgb(0x142220))
     static let marigold = Color(rgb(0xF2A12B))
     static let coral = color(0xE5603D, 0xF0866A)
     static let ink = color(0x142220, 0xEEF2EE)
@@ -108,7 +112,7 @@ private struct SetupView: View {
             ZStack {
                 Circle().fill(done == true ? Brand.lagoon : Brand.ink.opacity(0.12)).frame(width: 26, height: 26)
                 if done == true {
-                    Image(systemName: "checkmark").font(.system(size: 12, weight: .bold)).foregroundColor(.white)
+                    Image(systemName: "checkmark").font(.system(size: 12, weight: .bold)).foregroundColor(Brand.onLagoon)
                 } else {
                     Text("\(n)").font(.system(size: 13, weight: .semibold, design: .rounded))
                 }
@@ -133,7 +137,7 @@ private struct SetupView: View {
             Button("Open Accessibility Settings") {
                 NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
             }
-            .buttonStyle(Pill(color: Brand.marigold))
+            .buttonStyle(Pill(color: Brand.marigold, text: Brand.onMarigold))
         }
     }
 
@@ -143,7 +147,7 @@ private struct SetupView: View {
                 Text(layout.language.shortName).font(.system(size: 10, weight: .bold, design: .monospaced))
                     .padding(.horizontal, 5).padding(.vertical, 2)
                     .background(RoundedRectangle(cornerRadius: 4).fill(layout.hasWordList ? Brand.lagoon : .gray))
-                    .foregroundColor(.white)
+                    .foregroundColor(layout.hasWordList ? Brand.onLagoon : .white)
                 Text(layout.hasWordList ? layout.name : "\(layout.name) (not supported)")
             }
             .padding(.horizontal, 8).padding(.vertical, 5)
@@ -154,7 +158,7 @@ private struct SetupView: View {
             Button("Open Keyboard Settings") {
                 NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension")!)
             }
-            .buttonStyle(Pill(color: Brand.marigold))
+            .buttonStyle(Pill(color: Brand.marigold, text: Brand.onMarigold))
         }
     }
 
@@ -200,7 +204,8 @@ private struct SetupView: View {
                 .font(.system(size: 11)).opacity(0.6)
             Spacer()
             Button(model.trusted ? "Done" : "Later") { model.done() }
-                .buttonStyle(Pill(color: model.trusted ? Brand.lagoon : Brand.ink.opacity(0.35)))
+                .buttonStyle(Pill(color: model.trusted ? Brand.lagoon : Brand.ink.opacity(0.35),
+                                  text: model.trusted ? Brand.onLagoon : .white))
                 .keyboardShortcut(.defaultAction)
         }
         .padding(.horizontal, 24).padding(.bottom, 20)
@@ -209,10 +214,11 @@ private struct SetupView: View {
 
 private struct Pill: ButtonStyle {
     let color: Color
+    let text: Color
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 12, weight: .semibold, design: .rounded))
-            .foregroundColor(.white)
+            .foregroundColor(text)
             .padding(.horizontal, 14).padding(.vertical, 6)
             .background(Capsule().fill(color))
             .opacity(configuration.isPressed ? 0.75 : 1)

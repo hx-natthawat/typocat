@@ -11,6 +11,8 @@ A macOS menu-bar app that fixes words typed on the wrong keyboard layout
 and switches the layout for you. It works with any layout macOS has; detection
 needs a word list for the layout's language.
 
+<p align="center"><img src="docs/brand/demo.svg" width="720" alt="Animation: ghbdtn becomes привет, l;ylfu becomes สวัสดี, akuo becomes שלום, руддщ becomes hello when Space is pressed"></p>
+
 ## Build and run
 
 Requires macOS 13 or later and the Xcode command-line tools (full Xcode for `swift test`).
