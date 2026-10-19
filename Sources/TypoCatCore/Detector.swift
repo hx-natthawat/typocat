@@ -65,7 +65,9 @@ public final class Detector: @unchecked Sendable {
             let coverage = dict.segmentCoverage(text)
             return coverage >= 0.999 ? 0.8 : coverage * coverage * 0.75
         }
-        let word = text.trimmingCharacters(in: Self.edgePunctuation).lowercased()
+        var word = text.trimmingCharacters(in: Self.edgePunctuation).lowercased()
+        // Apostrophes belong inside words (don't, 'em) but are also quotes: 'to' is to.
+        if dict.count(of: word) == 0 { word = word.trimmingCharacters(in: Self.quotes) }
         guard !word.isEmpty, word.unicodeScalars.allSatisfy(Self.isWordScalar),
               dict.count(of: word) > 0 else { return 0 }
         return 0.6 + 0.4 * dict.commonness(of: word)
@@ -82,7 +84,9 @@ public final class Detector: @unchecked Sendable {
         guard force || strokes.count >= minimumStrokes, !ignored.contains(typed) else { return nil }
         if !force && ProtectedWords.contains(typed, in: category) { return nil }
         let typedScore = score(typed, as: current)
-        let punctuated = Self.hasUnusualPunctuation(typed)
+        // Words spelled with an edge apostrophe ('em, goin') are words, not stray keys.
+        let punctuated = Self.hasUnusualPunctuation(typed) || (Self.hasUnpairedQuote(typed)
+            && dictionaries[current]?.count(of: typed.trimmingCharacters(in: Self.edgePunctuation)) ?? 0 == 0)
         /// Beyond the reject threshold only a clearly more common alternative can win.
         func beats(_ altScore: Double, typed typedScore: Double) -> Bool {
             let required = typedScore > rejectThreshold ? typedScore + dominanceMargin : 0
@@ -132,6 +136,14 @@ public final class Detector: @unchecked Sendable {
             || scalars[(last + 1)...].contains { !usualTrailing.contains($0) }
     }
 
+    /// A quote with no partner ('nj is это on Russian) is more likely a letter key.
+    static func hasUnpairedQuote(_ typed: String) -> Bool {
+        let core = typed.trimmingCharacters(in: edgePunctuation).unicodeScalars
+        let opens = core.first.map(quotes.contains) ?? false, closes = core.last.map(quotes.contains) ?? false
+        return core.count > 1 && opens != closes
+    }
+
+    private static let quotes = CharacterSet(charactersIn: "'’")
     private static let edgePunctuation = CharacterSet.punctuationCharacters.union(.symbols)
         .subtracting(CharacterSet(charactersIn: "'’-"))
     /// Letters and combining marks of any script, plus in-word apostrophes and hyphens.

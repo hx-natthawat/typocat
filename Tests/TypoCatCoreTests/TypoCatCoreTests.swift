@@ -123,6 +123,14 @@ final class TypoCatCoreTests: XCTestCase {
         XCTAssertFalse(Detector.hasUnusualPunctuation("plain"))
     }
 
+    func testQuotedWordsScoreAsWords() {
+        let detector = Detector(dictionaries: [.english: FrequencyDictionary(contents: "to 900\n'em 5\n")])
+        XCTAssertGreaterThan(detector.score("'to'", as: .english), 0.6)
+        XCTAssertGreaterThan(detector.score("'em", as: .english), 0.6)
+        XCTAssertTrue(Detector.hasUnpairedQuote("'nj")) // это on Russian
+        XCTAssertFalse(Detector.hasUnpairedQuote("'to'"))
+    }
+
     func testThaiOrthographyRejectsNoise() {
         XCTAssertTrue(ThaiOrthography.isPlausible("สวัสดี"))
         XCTAssertFalse(ThaiOrthography.isPlausible("้ำสสน")) // starts with a tone mark
