@@ -34,7 +34,7 @@ enum SelfTest {
             // A second layout for the same language: Dvorak or Colemak next to QWERTY.
             ("hello", "en+dvorak", "en", true), ("people", "en", "en+dvorak", true), ("meeting", "en+colemak", "en", true),
             // From Data/extra: everyday words the subtitle lists lack.
-            ("ลาย", "th", "en", true), ("ภาษี", "th", "en", true), ("скриншот", "ru", "en", true),
+            ("ลาย", "th", "en", true), ("ภาษี", "th", "en", true), ("скриншот", "ru", "en", true), ("benutzername", "de", "en", true), ("télétravail", "fr", "en", true),
         ]
         let languages = Set(cases.flatMap { [Language(rawValue: $0.language), Language(rawValue: $0.other)] })
         let detector = Dictionaries.makeDetector(for: languages)
