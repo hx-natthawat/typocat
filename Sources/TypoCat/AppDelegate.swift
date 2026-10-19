@@ -271,30 +271,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 enum Dictionaries {
-    /// Looks in the app bundle first, then ./Data for `swift run` during development.
+    /// Looks in the app bundle first (compiled by build-app.sh), then ./Data for `swift run` during development.
     static func url(for language: Language) -> URL? {
         let name = "\(language.rawValue)_50k"
+        if let url = Bundle.main.url(forResource: name, withExtension: "tcdict") { return url }
         if let url = Bundle.main.url(forResource: name, withExtension: "txt") { return url }
         let dev = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appendingPathComponent("Data/\(name).txt")
         return FileManager.default.fileExists(atPath: dev.path) ? dev : nil
     }
 
-    /// Loads word lists only for `languages` (the enabled layouts): each list costs a few MB.
-    /// Loads one list at a time. Loading in parallel was 3x faster with 7 languages but left
-    /// the app at 100 MB instead of 59 MB (`--bench`), and loading runs in the background anyway.
+    /// A word list as text, with the per-language preparation the detector expects.
+    static func compile(_ language: Language, from url: URL) throws -> Data {
+        var contents = try String(contentsOf: url, encoding: .utf8)
+        if language.rawValue == "sr" { contents = SerbianScript.addingCyrillic(to: contents) }
+        return FrequencyDictionary.compile(contents: contents, splitCompounds: language.writesWithoutSpaces)
+    }
+
+    static func load(_ language: Language) -> FrequencyDictionary? {
+        guard let url = url(for: language) else {
+            NSLog("TypoCat: no word list for \(language.rawValue); its layout can't be detected")
+            return nil
+        }
+        if url.pathExtension == "tcdict" { return try? FrequencyDictionary(compiledURL: url) }
+        return autoreleasepool {
+            guard let data = try? compile(language, from: url) else { return nil }
+            let tmp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: tmp) }
+            // Map it like a bundled list, so development builds measure the same footprint.
+            guard (try? data.write(to: tmp)) != nil else { return nil }
+            return try? FrequencyDictionary(compiledURL: tmp)
+        }
+    }
+
+    /// Loads word lists only for `languages` (the enabled layouts). Compiled lists are mapped
+    /// from disk, so this takes milliseconds; text lists (`swift run`) are parsed first.
     static func makeDetector(for languages: some Sequence<Language>) -> Detector {
         var dicts: [Language: FrequencyDictionary] = [:]
-        for language in Set(languages) {
-            autoreleasepool {
-                guard let url = url(for: language), var contents = try? String(contentsOf: url, encoding: .utf8) else {
-                    NSLog("TypoCat: no word list for \(language.rawValue); its layout can't be detected")
-                    return
-                }
-                if language.rawValue == "sr" { contents = SerbianScript.addingCyrillic(to: contents) }
-                dicts[language] = FrequencyDictionary(contents: contents, splitCompounds: language.writesWithoutSpaces)
-            }
-        }
+        for language in Set(languages) { dicts[language] = load(language) }
         // Hand the freed parsing buffers back to the system, or they stay in the footprint.
         malloc_zone_pressure_relief(nil, 0)
         return Detector(dictionaries: dicts)

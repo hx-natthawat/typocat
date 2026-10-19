@@ -9,7 +9,7 @@
 - `scripts/make-dmg.sh` builds `build/TypoCat.dmg`, a drag-to-Applications installer with a background that explains the first-open steps.
 - App icon: a cute 3D Manee peeking over the spacebar. The menu bar shows a matching cat-head glyph next to the layout code and dims when TypoCat is off.
 - Social preview banner, and `scripts/make-brand-assets.sh` to render the icon and banner from `docs/brand/app-icon.svg`.
-- Word lists use about a third of the memory: 7 languages at 25 MB instead of 59 MB, and they load faster. Detection results are unchanged.
+- Word lists are compiled at build time and mapped from disk: they load in under 10 ms instead of 0.6–2.7 s, and the app uses 14 MB with English + Thai (was 19–21 MB, and 59 MB with 7 languages before that). Detection results are unchanged.
 - Keys typed while a fix is being written are held and replayed in order.
 - Electron apps (VS Code and others) are asked to expose their text fields to Accessibility.
 - Fixed: a wrong-layout word starting with a Thai tone or vowel mark (hello on the Thai layout is ้ำสสน) was skipped when it came right after a space.

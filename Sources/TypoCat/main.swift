@@ -4,6 +4,19 @@ import TypoCatCore
 if CommandLine.arguments.contains("--selftest") {
     exit(SelfTest.run() ? 0 : 1)
 }
+// Build step: `--compile-dict th Data/th_50k.txt out/th_50k.tcdict`
+if let i = CommandLine.arguments.firstIndex(of: "--compile-dict") {
+    let args = Array(CommandLine.arguments.dropFirst(i + 1))
+    guard args.count == 3 else { print("usage: --compile-dict <language> <in.txt> <out.tcdict>"); exit(2) }
+    do {
+        try Dictionaries.compile(Language(rawValue: args[0]), from: URL(fileURLWithPath: args[1]))
+            .write(to: URL(fileURLWithPath: args[2]))
+        exit(0)
+    } catch {
+        print("compile \(args[1]) failed: \(error)")
+        exit(1)
+    }
+}
 // Time to load word lists, as the app does at launch: `--bench en th`
 if let i = CommandLine.arguments.firstIndex(of: "--bench") {
     let languages = CommandLine.arguments.dropFirst(i + 1).map { Language(rawValue: $0) }

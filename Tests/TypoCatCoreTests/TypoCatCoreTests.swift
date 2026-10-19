@@ -79,6 +79,31 @@ final class TypoCatCoreTests: XCTestCase {
         XCTAssertEqual(dict.segmentCoverage("applezebra"), 1)
     }
 
+    func testCompiledFileMatchesInMemoryList() throws {
+        let contents = "hello 50\nสวัสดี 40\nworld 30\nhell 20\n"
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID()).tcdict")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try FrequencyDictionary.compile(contents: contents).write(to: url)
+        let mapped = try FrequencyDictionary(compiledURL: url)
+        let memory = FrequencyDictionary(contents: contents)
+        for word in ["hello", "สวัสดี", "world", "hell", "he", "zzz"] {
+            XCTAssertEqual(mapped.count(of: word), memory.count(of: word), word)
+            XCTAssertEqual(mapped.commonness(of: word), memory.commonness(of: word), word)
+        }
+        XCTAssertEqual(mapped.alphabet, memory.alphabet)
+        XCTAssertEqual(mapped.maxScalarLength, 6)
+        XCTAssertEqual(mapped.segmentCoverage("helloworld"), 1)
+    }
+
+    func testCorruptCompiledFileIsRejected() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID()).tcdict")
+        defer { try? FileManager.default.removeItem(at: url) }
+        var data = FrequencyDictionary.compile(contents: "a 1\n")
+        data.removeLast()
+        try data.write(to: url)
+        XCTAssertThrowsError(try FrequencyDictionary(compiledURL: url))
+    }
+
     func testCompoundsCreditTheirParts() {
         // "ทำ" alone is rare, but it appears inside a common phrase.
         let contents = "ทำอะไร 500\nอะไร 300\nทำ 2\n"

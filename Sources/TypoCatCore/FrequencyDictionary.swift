@@ -1,63 +1,139 @@
 import Foundation
 
 /// Ranked word list in FrequencyWords format: one "word count" pair per line.
+///
+/// Stored in one flat buffer, the same layout as a compiled `.tcdict` file, so the app can
+/// map a compiled list straight from disk instead of parsing text at launch:
+///
+///     "TCD1", wordCount, byteCount, maxScalarLength, alphabetBytes   (UInt32 each, little-endian)
+///     alphabet: its letters as UTF-8 separated by "\n", padded to 4 bytes
+///     offsets: Int32 × (wordCount + 1)   word i is bytes[offsets[i]..<offsets[i + 1]]
+///     counts:  Int32 × wordCount
+///     ranks:   Int32 × wordCount         1 = most frequent
+///     bytes:   the words as lowercase NFC UTF-8, sorted bytewise
+///
+/// Ranks are comparable across languages, unlike raw counts: the Thai corpus is far smaller
+/// than English. A [String: Entry] table took about 4x the memory, mostly for the separate
+/// heap allocation behind every non-ASCII String.
 public final class FrequencyDictionary: @unchecked Sendable {
-    /// Words as NFC UTF-8, sorted bytewise and packed into one buffer; word i is
-    /// bytes[offsets[i]..<offsets[i + 1]]. A [String: Entry] table took about 4x the memory,
-    /// mostly for the separate heap allocation behind every non-ASCII String.
-    private let bytes: [UInt8]
-    private let offsets: [Int32]
-    private let counts: [Int32]
-    /// 1 = most frequent. Ranks are comparable across languages, unlike raw counts:
-    /// the Thai corpus is far smaller than English.
-    private let ranks: [Int32]
+    private let storage: Storage
+    private let wordCount: Int
+    private let offsets: UnsafePointer<Int32>
+    private let counts: UnsafePointer<Int32>
+    private let ranks: UnsafePointer<Int32>
+    private let bytes: UnsafeRawPointer
     /// Longest entry measured in Unicode scalars, bounds the segmentation search.
     public let maxScalarLength: Int
     /// Letters seen in the list, most frequent first; candidate edits draw from these.
     public let alphabet: [Character]
 
+    private static let magic: UInt32 = 0x3144_4354 // "TCD1"
+    private static let headerSize = 20
+
+    /// Owns the buffer: either a file mapped read-only or memory built from a word list.
+    private final class Storage {
+        let base: UnsafeRawPointer
+        let size: Int
+        private let release: () -> Void
+        init(base: UnsafeRawPointer, size: Int, release: @escaping () -> Void) {
+            self.base = base; self.size = size; self.release = release
+        }
+        deinit { release() }
+    }
+
     /// - Parameter splitCompounds: for lists built from unsegmented text (Thai subtitles hold
     ///   entries like "คุณมาทำอะไรที่นี่"), also credit each entry's count to the words it splits into,
     ///   so short everyday words like ทำ rank as high as they are common.
-    public init(contents: String, splitCompounds: Bool = false) {
+    public convenience init(contents: String, splitCompounds: Bool = false) {
+        let data = Self.compile(contents: contents, splitCompounds: splitCompounds)
+        let memory = UnsafeMutableRawPointer.allocate(byteCount: max(data.count, 1), alignment: 8)
+        data.copyBytes(to: memory.assumingMemoryBound(to: UInt8.self), count: data.count)
+        try! self.init(storage: Storage(base: memory, size: data.count) { memory.deallocate() })
+    }
+
+    public convenience init(url: URL, splitCompounds: Bool = false) throws {
+        self.init(contents: try String(contentsOf: url, encoding: .utf8), splitCompounds: splitCompounds)
+    }
+
+    /// Maps a file written by `compile`. Its pages are read from disk as lookups touch them
+    /// and, being clean, don't count toward the app's memory footprint.
+    public convenience init(compiledURL url: URL) throws {
+        let fd = open(url.path, O_RDONLY)
+        guard fd >= 0 else { throw CocoaError(.fileReadNoSuchFile) }
+        defer { close(fd) }
+        var info = stat()
+        guard fstat(fd, &info) == 0, info.st_size >= Self.headerSize,
+              let map = mmap(nil, Int(info.st_size), PROT_READ, MAP_PRIVATE, fd, 0), map != MAP_FAILED else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        let size = Int(info.st_size)
+        try self.init(storage: Storage(base: UnsafeRawPointer(map), size: size) { munmap(map, size) })
+    }
+
+    private init(storage: Storage) throws {
+        let base = storage.base
+        func header(_ i: Int) -> Int { Int(UInt32(littleEndian: base.loadUnaligned(fromByteOffset: i * 4, as: UInt32.self))) }
+        guard storage.size >= Self.headerSize, header(0) == Self.magic else { throw CocoaError(.fileReadCorruptFile) }
+        let n = header(1), byteCount = header(2), alphabetBytes = header(4)
+        let alphabetStart = Self.headerSize
+        let offsetsStart = alphabetStart + Self.padded(alphabetBytes)
+        let countsStart = offsetsStart + (n + 1) * 4
+        let ranksStart = countsStart + n * 4
+        let bytesStart = ranksStart + n * 4
+        guard bytesStart + byteCount == storage.size else { throw CocoaError(.fileReadCorruptFile) }
+        self.storage = storage
+        wordCount = n
+        offsets = (base + offsetsStart).assumingMemoryBound(to: Int32.self)
+        counts = (base + countsStart).assumingMemoryBound(to: Int32.self)
+        ranks = (base + ranksStart).assumingMemoryBound(to: Int32.self)
+        bytes = base + bytesStart
+        maxScalarLength = header(3)
+        let letters = String(decoding: UnsafeRawBufferPointer(start: base + alphabetStart, count: alphabetBytes), as: UTF8.self)
+        alphabet = letters.split(separator: "\n").compactMap(\.first)
+    }
+
+    private static func padded(_ n: Int) -> Int { (n + 3) & ~3 }
+
+    /// Parses a word list into the flat layout described above, ready to write to a `.tcdict` file.
+    public static func compile(contents: String, splitCompounds: Bool = false) -> Data {
         var counts: [String: Int] = [:]
         var maxLen = 0
         for line in contents.split(whereSeparator: \.isNewline) {
             let parts = line.split(separator: " ")
             guard parts.count >= 2, let n = Int(parts[parts.count - 1]) else { continue }
-            let word = Self.normalized(parts[0..<(parts.count - 1)].joined(separator: " "))
+            let word = normalized(parts[0..<(parts.count - 1)].joined(separator: " "))
             // Keep the highest count when case-folding merges two entries.
             if n > counts[word, default: 0] { counts[word] = n }
             maxLen = max(maxLen, word.unicodeScalars.count)
         }
-        if splitCompounds { counts = Self.creditingParts(of: counts, maxLength: min(maxLen, 24)) }
+        if splitCompounds { counts = creditingParts(of: counts, maxLength: min(maxLen, 24)) }
         var letterCounts: [Character: Int] = [:]
         for (word, n) in counts { for ch in word where ch.isLetter { letterCounts[ch, default: 0] += n } }
         // Drop stray letters from other scripts (names, loanwords) that would only add noise.
         let total = letterCounts.values.reduce(0, +)
-        self.alphabet = letterCounts.filter { Double($0.value) / Double(max(1, total)) > 0.0005 }
-            .sorted { $0.value > $1.value }.map(\.key)
+        let alphabet = letterCounts.filter { Double($0.value) / Double(max(1, total)) > 0.0005 }
+            .sorted { $0.value != $1.value ? $0.value > $1.value : String($0.key) < String($1.key) }.map(\.key)
         // Ties broken by spelling so ranks, and every score, are the same on each run.
         let byCount = counts.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }
         var words = byCount.enumerated().map { (utf8: Array($0.element.key.utf8), count: $0.element.value, rank: $0.offset + 1) }
         words.sort { $0.utf8.lexicographicallyPrecedes($1.utf8) }
-        var bytes: [UInt8] = []
-        bytes.reserveCapacity(words.reduce(0) { $0 + $1.utf8.count })
-        var offsets: [Int32] = [0]
-        offsets.reserveCapacity(words.count + 1)
-        for word in words {
-            bytes.append(contentsOf: word.utf8)
-            offsets.append(Int32(bytes.count))
-        }
-        self.bytes = bytes
-        self.offsets = offsets
-        self.counts = words.map { Int32(clamping: $0.count) }
-        self.ranks = words.map { Int32($0.rank) }
-        self.maxScalarLength = min(maxLen, 24)
-    }
 
-    public convenience init(url: URL, splitCompounds: Bool = false) throws {
-        self.init(contents: try String(contentsOf: url, encoding: .utf8), splitCompounds: splitCompounds)
+        var out = Data()
+        func append(_ v: UInt32) { withUnsafeBytes(of: v.littleEndian) { out.append(contentsOf: $0) } }
+        func append(_ v: Int32) { withUnsafeBytes(of: v.littleEndian) { out.append(contentsOf: $0) } }
+        let letters = Array(alphabet.map(String.init).joined(separator: "\n").utf8)
+        let byteCount = words.reduce(0) { $0 + $1.utf8.count }
+        out.reserveCapacity(headerSize + padded(letters.count) + (words.count * 3 + 1) * 4 + byteCount)
+        for v in [magic, UInt32(words.count), UInt32(byteCount), UInt32(min(maxLen, 24)), UInt32(letters.count)] { append(v) }
+        out.append(contentsOf: letters)
+        out.append(contentsOf: [UInt8](repeating: 0, count: padded(letters.count) - letters.count))
+        var offset: Int32 = 0
+        append(offset)
+        for word in words { offset += Int32(word.utf8.count); append(offset) }
+        for word in words { append(Int32(clamping: word.count)) }
+        for word in words { append(Int32(word.rank)) }
+        for word in words { out.append(contentsOf: word.utf8) }
+        return out
     }
 
     /// Splits each entry into the fewest other entries (two scalars or more) that cover it
@@ -117,14 +193,14 @@ public final class FrequencyDictionary: @unchecked Sendable {
         return result
     }
 
-    public var isEmpty: Bool { counts.isEmpty }
+    public var isEmpty: Bool { wordCount == 0 }
 
-    public func count(of word: String) -> Int { index(of: word).map { Int(counts[$0]) } ?? 0 }
+    public func count(of word: String) -> Int { index(of: word).map { Int(Int32(littleEndian: counts[$0])) } ?? 0 }
 
     /// 0...1: 1 for the top word, falling with log rank to 0 at the end of the list; 0 if absent.
     public func commonness(of word: String) -> Double {
-        guard let i = index(of: word), counts.count > 1 else { return 0 }
-        return 1 - log(Double(ranks[i])) / log(Double(counts.count))
+        guard let i = index(of: word), wordCount > 1 else { return 0 }
+        return 1 - log(Double(Int32(littleEndian: ranks[i]))) / log(Double(wordCount))
     }
 
     /// Lowercase NFC, the form entries are stored in. Typed text and word lists can differ
@@ -141,19 +217,17 @@ public final class FrequencyDictionary: @unchecked Sendable {
 
     /// Binary search over the packed words.
     private func index(of key: UnsafeRawBufferPointer) -> Int? {
-        bytes.withUnsafeBytes { buffer in
-            var low = 0, high = counts.count
-            while low < high {
-                let mid = (low + high) / 2
-                let start = Int(offsets[mid]), length = Int(offsets[mid + 1]) - start
-                let shared = min(length, key.count)
-                var order = shared == 0 ? 0 : memcmp(buffer.baseAddress! + start, key.baseAddress!, shared)
-                if order == 0 { order = length < key.count ? -1 : (length > key.count ? 1 : 0) }
-                if order == 0 { return mid }
-                if order < 0 { low = mid + 1 } else { high = mid }
-            }
-            return nil
+        var low = 0, high = wordCount
+        while low < high {
+            let mid = (low + high) / 2
+            let start = Int(Int32(littleEndian: offsets[mid])), length = Int(Int32(littleEndian: offsets[mid + 1])) - start
+            let shared = min(length, key.count)
+            var order = shared == 0 ? 0 : memcmp(bytes + start, key.baseAddress!, shared)
+            if order == 0 { order = length < key.count ? -1 : (length > key.count ? 1 : 0) }
+            if order == 0 { return mid }
+            if order < 0 { low = mid + 1 } else { high = mid }
         }
+        return nil
     }
 
     /// Fraction of scalars covered by dictionary words (each at least two scalars long)

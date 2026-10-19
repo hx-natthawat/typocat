@@ -138,19 +138,20 @@ Local data lives in `~/Library/Application Support/TypoCat/`:
 ## Footprint
 
 A native Swift app (no Electron, no web view): a 0.5 MB binary plus about
-11 MB of word lists. Word lists load in the background at launch and only for
-enabled layouts. Measured with `swift run -c release TypoCat --bench en th`:
+17 MB of compiled word lists. The build compiles each list into a sorted,
+binary-searchable file (`.tcdict`), and the app maps the files for enabled
+layouts straight from disk. Nothing is parsed at launch, and mapped pages don't
+count toward the app's memory. Measured with
+`build/TypoCat.app/Contents/MacOS/TypoCat --bench en th`, and the running app with `footprint`:
 
-| Layouts enabled | Load time (background) | Memory (Activity Monitor) |
-|---|---|---|
-| English only | 0.1 s | 15 MB |
-| English + Russian | 0.4 s | 19–23 MB |
-| English + Thai | 0.6–0.9 s | 19–21 MB |
-| 7 languages | 1.5 s | 25 MB |
-| All 16 languages | 2.2–2.7 s | 37–53 MB |
+| Layouts enabled | Load time | Word lists in memory | Running app (Activity Monitor) |
+|---|---|---|---|
+| English + Thai | under 0.01 s | under 1 MB | 14 MB |
+| All 16 languages | under 0.01 s | under 1 MB | not measured; the lists add under 1 MB |
 
-Each word list is packed into one sorted byte buffer (about 1 MB per language)
-and looked up by binary search.
+Before compiled lists, the app parsed text at launch: 0.6–0.9 s and 19–21 MB for
+English + Thai, 2.2–2.7 s and 37–53 MB for all 16. `swift run` still reads the
+text lists in `Data/`, so development builds load as slowly as before.
 
 When idle it uses no CPU: it reacts only to key presses. Electron apps (VS Code,
 Slack, Discord) are asked to expose their text fields to Accessibility so the
