@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 (2026-10-19)
 
 ### New
 - Latin layouts: French (AZERTY), German, Czech and Hungarian (QWERTZ), Spanish, Italian, Turkish, Swedish, Danish and Finnish. 98–100% of words typed on the wrong one are fixed.

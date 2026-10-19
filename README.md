@@ -132,7 +132,7 @@ your keyboards and a test field. Open it again any time from the menu: Setup….
 
 Check for Updates… in the menu tells you when a newer release is out. Release
 builds are ad-hoc signed, so after installing an update turn TypoCat off and on
-again in Accessibility settings. To publish a release, push a tag such as `v0.2.0`:
+again in Accessibility settings. To publish a release, push a tag such as `v0.3.0`:
 the Release workflow builds the disk image and attaches it.
 
 ## Using it
