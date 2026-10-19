@@ -289,8 +289,26 @@ enum Dictionaries {
     /// A word list as text, with the per-language preparation the detector expects.
     static func compile(_ language: Language, from url: URL) throws -> Data {
         var contents = try String(contentsOf: url, encoding: .utf8)
-        if language.rawValue == "sr" { contents = SerbianScript.addingCyrillic(to: contents) }
+        if language.rawValue == "sr" {
+            let english = Dictionaries.url(for: .english).flatMap { $0.pathExtension == "txt" ? try? String(contentsOf: $0, encoding: .utf8) : nil }
+            contents = SerbianScript.addingCyrillic(to: contents, english: english)
+        }
+        if let extra = extraWords(for: language) {
+            // Ranked like the list's 5000th word: everyday, but below the most common ones.
+            let lines = contents.split(whereSeparator: \.isNewline)
+            let count = lines.count >= 5000 ? lines[4999].split(separator: " ").last.flatMap { Int($0) } ?? 1 : 1
+            contents += "\n" + extra.map { "\($0) \(count)" }.joined(separator: "\n")
+        }
         return FrequencyDictionary.compile(contents: contents, splitCompounds: language.writesWithoutSpaces)
+    }
+
+    /// Everyday words the subtitle lists lack (ลาย, ภาษี, скриншот): Data/extra/<language>.txt,
+    /// one per line. Part of this repository, unlike the downloaded lists.
+    static func extraWords(for language: Language) -> [String]? {
+        let url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("Data/extra/\(language.rawValue).txt")
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else { return nil }
+        return text.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
     }
 
     static func load(_ language: Language) -> FrequencyDictionary? {

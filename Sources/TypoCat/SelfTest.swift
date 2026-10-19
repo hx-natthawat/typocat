@@ -28,6 +28,8 @@ enum SelfTest {
             ("ευχαριστώ", "el", "en", true), ("καλημέρα", "el", "en", true), ("και", "el", "en", true),
             ("سلام", "fa", "en", true), ("здраво", "sr", "en", true), ("здравей", "bg", "en", true),
             ("გამარჯობა", "ka", "en", true), ("շնորհակալություն", "hy", "en", true),
+            // From Data/extra: everyday words the subtitle lists lack.
+            ("ลาย", "th", "en", true), ("ภาษี", "th", "en", true), ("скриншот", "ru", "en", true),
         ]
         let languages = Set(cases.flatMap { [Language(rawValue: $0.language), Language(rawValue: $0.other)] })
         let detector = Dictionaries.makeDetector(for: languages)
@@ -89,6 +91,7 @@ enum SelfTest {
         guard let en = layouts[.english] else { print("no English layout installed"); return }
         let languages = Language.bundled.filter { layouts[$0] != nil && Dictionaries.url(for: $0) != nil }
         let detector = Dictionaries.makeDetector(for: languages)
+        let englishList = Dictionaries.load(.english)
         print("lang  layout                               | fixed on EN layout | EN fixed on it | correct text changed")
         for language in languages where language != .english {
             let other = layouts[language]!
@@ -101,6 +104,7 @@ enum SelfTest {
                          other.inputSourceID.padding(toLength: 36, withPad: " ", startingAt: 0),
                          a.rate, a.words, b.rate, b.words, changed))
             if !a.misses.isEmpty { print("      missed:", a.misses.joined(separator: " ")) }
+            if !b.misses.isEmpty { print("      EN missed:", b.misses.joined(separator: " ")) }
             // English with ordinary punctuation, typed correctly, must stay as it is.
             let punctuated = ranked(.english, min(n, 2000)).flatMap { ["\($0),", "\($0).", "\($0);", "(\($0)", "\"\($0)", "'\($0)'"] }
             let punctuatedChanged = punctuated.filter { w in
@@ -119,11 +123,15 @@ enum SelfTest {
             }).sorted()
             print("      one-key words reread into English:", singles.isEmpty ? "none" : singles.joined(separator: " "))
 
-            // Short words left alone, recovered once a later word is fixed. Measured for every
-            // language; only those `rereadsInto` accepts get it in the app. LS_REREAD_ALL=1 tries all.
-            let rereadAll = ProcessInfo.processInfo.environment["LS_REREAD_ALL"] == "1"
-            if rereadAll { detector.rereadsInto = { _ in true } }
-            guard rereadAll || detector.rereadsInto(language) else { continue }
+            // Short words left alone, recovered once a later word is fixed. LS_KEEP=0.7 tries
+            // another keep score; LS_REREAD_ALL=1 applies it to every language.
+            let env = ProcessInfo.processInfo.environment
+            if let keep = env["LS_KEEP"].flatMap(Double.init) {
+                let standard = detector.rereadKeepScore
+                let all = env["LS_REREAD_ALL"] == "1"
+                detector.rereadKeepScore = { all || standard($0) != nil ? keep : nil }
+            }
+            guard detector.rereadKeepScore(language) != nil else { continue }
             let missedShort = ranked(language, n).filter { w in
                 guard let st = strokes(for: w, in: other), (2...3).contains(st.count), let typed = en.render(st) else { return false }
                 return detector.decide(strokes: st, typed: typed, current: .english, layouts: pair)?.replacement != w
@@ -136,9 +144,12 @@ enum SelfTest {
             let converted = englishShort.filter { w in
                 detector.reread(strokes: strokes(for: w, in: en)!, typed: w, current: .english, as: language, layouts: pair) != nil
             }
-            print(String(format: "      reread: recovered %.1f%% of %d missed short words; changed %.1f%% of %d correct short English words",
+            // Weighted by use: how much short English in running text would change.
+            let uses = { (words: [String]) in words.reduce(0) { $0 + (englishList?.count(of: $1) ?? 0) } }
+            print(String(format: "      reread: recovered %.1f%% of %d missed short words; changed %.1f%% of %d correct short English words (%.3f%% of their uses)",
                          100 * Double(recovered.count) / Double(max(1, missedShort.count)), missedShort.count,
-                         100 * Double(converted.count) / Double(max(1, englishShort.count)), englishShort.count))
+                         100 * Double(converted.count) / Double(max(1, englishShort.count)), englishShort.count,
+                         100 * Double(uses(converted)) / Double(max(1, uses(englishShort)))))
         }
     }
 
@@ -208,7 +219,7 @@ enum SelfTest {
             total += 1
             if detector.decide(strokes: st, typed: typed, current: wrong.language, layouts: layouts)?.replacement == word {
                 fixed += 1
-            } else if misses.count < 10 {
+            } else if misses.count < 16 {
                 misses.append("\(word)(\(typed))")
             }
             if detector.decide(strokes: st, typed: word, current: intended.language, layouts: layouts) != nil { changed += 1 }
@@ -218,8 +229,15 @@ enum SelfTest {
 
     private static func ranked(_ language: Language, _ n: Int) -> [String] {
         guard let url = Dictionaries.url(for: language), let text = try? String(contentsOf: url, encoding: .utf8) else { return [] }
-        let words = text.split(separator: "\n").prefix(n).compactMap { $0.split(separator: " ").first.map(String.init) }
-        return language.rawValue == "sr" ? words.map { SerbianScript.cyrillic($0) ?? $0 } : words
+        guard language.rawValue == "sr" else {
+            return text.split(separator: "\n").prefix(n).compactMap { $0.split(separator: " ").first.map(String.init) }
+        }
+        // The Cyrillic words the app's list has, in rank order: English quotes are left out.
+        let english = Dictionaries.url(for: .english).flatMap { try? String(contentsOf: $0, encoding: .utf8) }
+        return SerbianScript.addingCyrillic(to: text, english: english).split(separator: "\n")
+            .compactMap { $0.split(separator: " ").first.map(String.init) }
+            .filter { $0.unicodeScalars.first.map { (0x0400...0x04FF).contains($0.value) } ?? false }
+            .prefix(n).map { $0 }
     }
 
     /// Inverts a layout to find the keystrokes that type `text`.

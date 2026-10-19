@@ -292,13 +292,36 @@ public enum SerbianScript {
     }
 
     /// Word list contents with a Cyrillic line added after every Latin one.
-    public static func addingCyrillic(to contents: String) -> String {
+    ///
+    /// Subtitles quote English ("out", "but", "got"), and their Cyrillic copies (оут, бут, гот)
+    /// would make English typed on the Serbian layout read as Serbian. With `english` (the English
+    /// list's contents), a word is skipped when its English rank is over `englishBias` times better
+    /// than its Serbian one: "we" is 15th in English and 6461st here. Words common in both (то, но)
+    /// stay. 30 instead of 10 keeps но ("but", 646th; "no" is 27th in English).
+    public static func addingCyrillic(to contents: String, english: String? = nil, englishBias: Int = 30) -> String {
+        let englishRanks = english.map(ranks) ?? [:]
         var out = ""
         out.reserveCapacity(contents.utf8.count * 2)
+        var rank = 0
         for line in contents.split(whereSeparator: \.isNewline) {
             out += line + "\n"
+            rank += 1
             let parts = line.split(separator: " ")
-            if parts.count == 2, let cyr = cyrillic(parts[0].lowercased()) { out += "\(cyr) \(parts[1])\n" }
+            guard parts.count == 2 else { continue }
+            let latin = parts[0].lowercased()
+            if let en = englishRanks[latin], en * englishBias < rank { continue }
+            if let cyr = cyrillic(latin) { out += "\(cyr) \(parts[1])\n" }
+        }
+        return out
+    }
+
+    /// Line number of each word's first appearance, 1 = most frequent.
+    private static func ranks(_ contents: String) -> [String: Int] {
+        var out: [String: Int] = [:]
+        for (i, line) in contents.split(whereSeparator: \.isNewline).enumerated() {
+            guard let word = line.split(separator: " ").first else { continue }
+            let key = word.lowercased()
+            if out[key] == nil { out[key] = i + 1 }
         }
         return out
     }

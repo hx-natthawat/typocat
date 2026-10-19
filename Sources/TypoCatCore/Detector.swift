@@ -27,10 +27,6 @@ public final class Detector: @unchecked Sendable {
     /// The typed text may be a real but rare word ("mew" for ทำไม). Replace it
     /// anyway when the other rendering scores this much higher.
     public var dominanceMargin = 0.2
-    /// Words reread after a later fix are kept when they score at least this in
-    /// their own language (about the top 200 words).
-    public var rereadKeepScore = 0.8
-
     // Typo correction (see TypoCorrector.swift); tuned with `--eval-typos`.
     public var typoMinimumLength = 4
     /// The winning candidate must be at least this common in its language (0...1 by rank).
@@ -38,13 +34,17 @@ public final class Detector: @unchecked Sendable {
     /// ...and at least this many times as frequent as the next candidate. 10 instead of 3
     /// cuts English wrong-word fixes from 4.8% to 1.9% of typos for 3 points of fix rate.
     public var typoDominance = 10.0
-    /// Whether earlier words may be reread into a language. `LS_REREAD_ALL=1 --eval 5000`
-    /// measures it for every language: missed short words recovered against correct short
-    /// English words changed. Allowed where the latter stays at 0.5% or less: Thai (and other
-    /// spaceless scripts: 79% recovered), Russian (85%) and Kazakh (79%). Elsewhere it changes
-    /// 1-9% of correct English words (Serbian 6.7%, Macedonian 8.8%); into English, ~3% of Thai.
-    public var rereadsInto: @Sendable (Language) -> Bool = {
-        $0.writesWithoutSpaces || ["ru", "kk"].contains($0.rawValue)
+    /// After a later fix into a language, an earlier word left alone is reread into it unless it
+    /// scores at least this in its own language: 0.8 is about the top 200 words, 0.65 the top
+    /// 13000. nil: only one-key words are reread (below). `LS_REREAD_ALL=1 LS_KEEP=0.65 --eval 5000`
+    /// measures it: missed short words recovered against correct short English words changed.
+    /// 0.8 where that changes 0.5% of short English words or fewer: Thai and other spaceless
+    /// scripts (79% recovered), Russian (85%), Kazakh (79%). Elsewhere 0.8 changes 1-9%;
+    /// 0.65 changes none of the top 5000 and at most 0.04% of short English as used, for
+    /// 35-56% recovered. Into English it isn't measured (~3% of Thai at 0.8), so it stays off.
+    public var rereadKeepScore: @Sendable (Language) -> Double? = {
+        if $0 == .english { return nil }
+        return $0.writesWithoutSpaces || ["ru", "kk"].contains($0.rawValue) ? 0.8 : 0.65
     }
     /// Any language takes back a one-key word left alone before a fix ("ณ love" → "I love")
     /// when that letter is a word this common in it: about the top 10 words.
@@ -116,13 +116,14 @@ public final class Detector: @unchecked Sendable {
     public func reread(strokes: [KeyStroke], typed: String, current: Language, as target: Language,
                        layouts: [Language: LayoutMap], ignoring ignored: Set<String> = [],
                        category: AppCategory = .general) -> String? {
-        guard target != current, rereadsInto(target) || strokes.count == 1, !ignored.contains(typed),
+        let keepScore = rereadKeepScore(target)
+        guard target != current, keepScore != nil || strokes.count == 1, !ignored.contains(typed),
               !ProtectedWords.contains(typed, in: category),
               let alt = layouts[target]?.render(strokes), alt != typed else { return nil }
         let altScore = score(alt, as: target), typedScore = score(typed, as: current)
-        if !rereadsInto(target), altScore < singleKeyRereadScore { return nil }
+        if keepScore == nil, altScore < singleKeyRereadScore { return nil }
         // Common words (นา, ทำ, go) stay: mixed-language text is normal. Rare ones (fu, z) may go.
-        guard typedScore < rereadKeepScore else { return nil }
+        guard typedScore < keepScore ?? 0.8 else { return nil }
         return altScore >= acceptThreshold && altScore > typedScore ? alt : nil
     }
 
