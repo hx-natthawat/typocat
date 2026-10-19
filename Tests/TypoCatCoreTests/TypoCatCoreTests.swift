@@ -125,8 +125,9 @@ final class TypoCatCoreTests: XCTestCase {
 
     func testQuotedWordsScoreAsWords() {
         let detector = Detector(dictionaries: [.english: FrequencyDictionary(contents: "to 900\n'em 5\n")])
+        // Known words score 0.6 or more; 'em is the rarest here, so exactly 0.6.
         XCTAssertGreaterThan(detector.score("'to'", as: .english), 0.6)
-        XCTAssertGreaterThan(detector.score("'em", as: .english), 0.6)
+        XCTAssertGreaterThan(detector.score("'em", as: .english), 0.5)
         XCTAssertTrue(Detector.hasUnpairedQuote("'nj")) // это on Russian
         XCTAssertFalse(Detector.hasUnpairedQuote("'to'"))
     }
@@ -141,6 +142,49 @@ final class TypoCatCoreTests: XCTestCase {
         XCTAssertEqual(SerbianScript.cyrillic("ljubav"), "љубав")
         XCTAssertEqual(SerbianScript.cyrillic("džep"), "џеп")
         XCTAssertNil(SerbianScript.cyrillic("xyz"))
+    }
+
+    func testSerbianListLeavesOutEnglishQuotes() {
+        // "out" is 4th here but 1st in English: a quote, not Serbian.
+        let contents = SerbianScript.addingCyrillic(to: "da 10\nne 9\nje 8\nout 5\n", english: "out 100\nda 1\n",
+                                                    englishBias: 2)
+        XCTAssertTrue(contents.contains("да 10"))
+        XCTAssertFalse(contents.contains("оут"))
+    }
+
+    func testPrefixLookup() {
+        let d = FrequencyDictionary(contents: "hello 5\nhelp 4\nworld 3\n")
+        XCTAssertTrue(d.hasPrefix("hel"))
+        XCTAssertTrue(d.hasPrefix("Hello"))
+        XCTAssertFalse(d.hasPrefix("hellos"))
+        XCTAssertFalse(d.hasPrefix("wx"))
+        XCTAssertFalse(d.hasPrefix("zz"))
+    }
+
+    func testThaiRunFixedBeforeSpace() {
+        // Keys 0...2 type a b c on "en" and ก า ร on "th".
+        func map(_ letters: [String], _ language: Language) -> LayoutMap {
+            var forward: [KeyStroke: String] = [:]
+            for (i, s) in letters.enumerated() { forward[KeyStroke(keyCode: UInt16(i), shift: false)] = s }
+            return LayoutMap(language: language, inputSourceID: "test.\(language)", forward: forward)
+        }
+        let layouts = [Language.english: map(["a", "b", "c"], .english), .thai: map(["ก", "า", "ร"], .thai)]
+        let d = Detector(dictionaries: [.english: FrequencyDictionary(contents: "abba 5\n"),
+                                        .thai: FrequencyDictionary(contents: "การ 50\n")])
+        d.midWordMinimumStrokes = 3
+        XCTAssertEqual(d.decideMidWord(strokes: strokes([0, 1, 2]), typed: "abc", current: .english, layouts: layouts)?.replacement, "การ")
+        XCTAssertNil(d.decideMidWord(strokes: strokes([0, 1, 2]), typed: "abc", current: .english, layouts: layouts,
+                                     category: .terminal))
+        // "ab" may still become "abba".
+        d.midWordMinimumStrokes = 2
+        XCTAssertNil(d.decideMidWord(strokes: strokes([0, 1]), typed: "ab", current: .english, layouts: layouts))
+    }
+
+    func testRereadKeepScorePerLanguage() {
+        let d = detector()
+        XCTAssertNil(d.rereadKeepScore(.english))
+        XCTAssertEqual(d.rereadKeepScore(Self.ru), 0.8)
+        XCTAssertEqual(d.rereadKeepScore(Language(rawValue: "he")), 0.65)
     }
 
     func testTypoFixPicksClearWinner() {

@@ -40,6 +40,10 @@ if let i = CommandLine.arguments.firstIndex(of: "--eval-typos") {
     SelfTest.evaluateTypos(top: CommandLine.arguments.dropFirst(i + 1).first.flatMap { Int($0) } ?? 5000)
     exit(0)
 }
+if let i = CommandLine.arguments.firstIndex(of: "--eval-midword") {
+    SelfTest.evaluateMidWord(top: CommandLine.arguments.dropFirst(i + 1).first.flatMap { Int($0) } ?? 3000)
+    exit(0)
+}
 if let i = CommandLine.arguments.firstIndex(of: "--eval") {
     let n = CommandLine.arguments.dropFirst(i + 1).first.flatMap { Int($0) } ?? 5000
     SelfTest.evaluate(top: n)

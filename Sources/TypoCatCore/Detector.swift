@@ -54,6 +54,14 @@ public final class Detector: @unchecked Sendable {
     /// other rendering is all letters, the typed score counts this much.
     public var strippedPunctuationWeight = 0.5
 
+    /// Thai and other scripts written without spaces are typed in long runs, so waiting for Space
+    /// means a whole phrase comes out wrong. `decideMidWord` fixes the run once it has this many
+    /// keys, can't be the start of any word in the current language, and reads as whole words in
+    /// the other. Tuned with `--eval-midword`: 7 keys fix 95% of Thai runs early (median after
+    /// 38% of the keys) and newly change 0.04% of English words the list doesn't know; 5 keys
+    /// fixed 98% but changed 0.23%, plus 0.11% of words with a typo.
+    public var midWordMinimumStrokes = 7
+
     public init(dictionaries: [Language: FrequencyDictionary]) {
         self.dictionaries = dictionaries
     }
@@ -108,6 +116,27 @@ public final class Detector: @unchecked Sendable {
         }
         guard let best else { return nil }
         return force || best.wins ? best.0 : nil
+    }
+
+    /// Checked after each key of a word, before Space: a fix into a language written without
+    /// spaces, or nil to keep waiting. Not in terminals and editors, where keys are commands.
+    public func decideMidWord(strokes: [KeyStroke], typed: String, current: Language,
+                              layouts: [Language: LayoutMap], ignoring ignored: Set<String> = [],
+                              category: AppCategory = .general) -> Correction? {
+        guard category != .terminal, category != .code, strokes.count >= midWordMinimumStrokes,
+              !current.writesWithoutSpaces, !ignored.contains(typed), let dict = dictionaries[current] else { return nil }
+        // Anything that may still become a word here ("(hel", "don'") waits for Space.
+        let word = typed.trimmingCharacters(in: Self.edgePunctuation)
+        if word.isEmpty || dict.hasPrefix(word) || ProtectedWords.contains(typed, in: category) { return nil }
+        for (language, layout) in layouts where language.writesWithoutSpaces {
+            guard let alt = layout.render(strokes), let altDict = dictionaries[language],
+                  language != .thai || ThaiOrthography.isPlausible(alt),
+                  alt.unicodeScalars.allSatisfy(Self.isWordScalar),
+                  // Every key so far is part of a word: the run ends on a word boundary.
+                  altDict.count(of: alt) > 0 || altDict.segmentCoverage(alt) >= 0.999 else { continue }
+            return Correction(original: typed, replacement: alt, from: current, to: language)
+        }
+        return nil
     }
 
     /// After a later word was fixed to `target`, decides whether an earlier word

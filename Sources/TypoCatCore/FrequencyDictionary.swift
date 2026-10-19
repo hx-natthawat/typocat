@@ -215,6 +215,26 @@ public final class FrequencyDictionary: @unchecked Sendable {
         return key.withUTF8 { index(of: UnsafeRawBufferPointer($0)) }
     }
 
+    /// Whether some entry starts with `prefix`: a word still being typed may become it.
+    public func hasPrefix(_ prefix: String) -> Bool {
+        var key = Self.normalized(prefix)
+        return key.withUTF8 { key in
+            // Entries are sorted bytewise, so those starting with the key follow its insertion point.
+            var low = 0, high = wordCount
+            while low < high {
+                let mid = (low + high) / 2
+                let start = Int(Int32(littleEndian: offsets[mid])), length = Int(Int32(littleEndian: offsets[mid + 1])) - start
+                let shared = min(length, key.count)
+                var order = shared == 0 ? 0 : memcmp(bytes + start, key.baseAddress!, shared)
+                if order == 0 && length < key.count { order = -1 }
+                if order < 0 { low = mid + 1 } else { high = mid }
+            }
+            guard low < wordCount else { return false }
+            let start = Int(Int32(littleEndian: offsets[low])), length = Int(Int32(littleEndian: offsets[low + 1])) - start
+            return length >= key.count && (key.isEmpty || memcmp(bytes + start, key.baseAddress!, key.count) == 0)
+        }
+    }
+
     /// Binary search over the packed words.
     private func index(of key: UnsafeRawBufferPointer) -> Int? {
         var low = 0, high = wordCount

@@ -32,7 +32,10 @@ final class Interceptor {
     private var fenceUp = false
     private var fenceGeneration = 0
     private var heldEvents: [CGEvent] = []
-    private var lastCorrection: (correction: Correction, delimiter: CGEvent, word: String)?
+    /// The rewrite switched layouts, so held keys are rebuilt to type on the new one.
+    private var switchedDuringFence = false
+    /// `delimiter` is nil for a fix made before Space (Thai typed in one run).
+    private var lastCorrection: (correction: Correction, delimiter: CGEvent?, word: String)?
     /// Words just typed and left alone, each followed by one space, oldest first.
     /// A later fix may reread them (short words like `z,` for ผม are ambiguous alone).
     private var recentWords: [(strokes: [KeyStroke], typed: String, language: Language)] = []
@@ -183,7 +186,17 @@ final class Interceptor {
         }
         lastCorrection = nil
         strokes.append(stroke)
-        if strokes.count > 48 { reset() }
+        if strokes.count > 48 { reset(); return pass }
+        // Thai is typed without spaces: fix a long run now rather than at the end of the phrase.
+        if let typed = inputSources.layouts[current]?.render(strokes),
+           let fix = detector.decideMidWord(strokes: strokes, typed: typed, current: current,
+                                            layouts: inputSources.layouts, ignoring: store.ignoredWords, category: category) {
+            strokes.removeAll()
+            recentWords.removeAll()
+            // This key goes through first; the rewrite waits for the field to show it.
+            raiseFence()
+            DispatchQueue.main.async { self.apply(fix, delimiter: nil, word: typed) }
+        }
         return pass
     }
 
@@ -225,7 +238,7 @@ final class Interceptor {
         return Correction(original: original, replacement: replacement, from: fix.from, to: fix.to)
     }
 
-    private func apply(_ correction: Correction, delimiter: CGEvent, word: String, attempt: Int = 0) {
+    private func apply(_ correction: Correction, delimiter: CGEvent?, word: String, attempt: Int = 0) {
         // Backspacing blind is only safe if the field holds what we think it does.
         // Unreadable fields fall back to trusting our keystroke buffer.
         if FocusedText.check(endsWith: correction.original) == .mismatch {
@@ -238,37 +251,47 @@ final class Interceptor {
                 return
             }
             NSLog("TypoCat: field text doesn't end with the typed word; skipping fix")
-            post(delimiter, last: true)
+            if let delimiter { post(delimiter, last: true) } else { lowerFence() }
             lastCorrection = nil
             return
         }
         store.recordLanguage(correction.to, in: frontBundleID)
-        replace(scalarCount: correction.original.unicodeScalars.count, with: correction.replacement)
-        inputSources.select(correction.to)
-        post(delimiter, last: true)
+        replace(scalarCount: correction.original.unicodeScalars.count, with: correction.replacement,
+                fenceAtEnd: delimiter == nil)
+        select(correction.to)
+        if let delimiter { post(delimiter, last: true) }
         lastCorrection = (correction, delimiter, word)
         onCorrection?(correction)
     }
 
-    private func undo(_ correction: Correction, delimiter: CGEvent, word: String) {
+    private func undo(_ correction: Correction, delimiter: CGEvent?, word: String) {
         lastCorrection = nil
         store.ignore(word)
         store.correctLanguage(from: correction.to, to: correction.from, in: frontBundleID)
         DispatchQueue.main.async {
-            // The field should end with our replacement plus the replayed delimiter.
-            if let prefix = FocusedText.textBeforeCaret(), !FocusedText.endsWith(prefix, correction.replacement, ignoringLast: 1) {
+            // The field should end with our replacement plus the replayed delimiter, if any.
+            let trailing = delimiter == nil ? 0 : 1
+            if let prefix = FocusedText.textBeforeCaret(),
+               !FocusedText.endsWith(prefix, correction.replacement, ignoringLast: trailing) {
                 self.lowerFence()
                 return
             }
-            // +1 removes the replayed delimiter, which we type again after the original.
-            self.replace(scalarCount: correction.replacement.unicodeScalars.count + 1, with: correction.original)
-            self.inputSources.select(correction.from)
-            self.post(delimiter, last: true)
+            // Removes the replayed delimiter too, which we type again after the original.
+            self.replace(scalarCount: correction.replacement.unicodeScalars.count + trailing, with: correction.original,
+                         fenceAtEnd: delimiter == nil)
+            self.select(correction.from)
+            if let delimiter { self.post(delimiter, last: true) }
         }
     }
 
+    private func select(_ language: Language) {
+        if fenceUp && language != inputSources.currentLanguage() { switchedDuringFence = true }
+        inputSources.select(language)
+    }
+
     /// Deletes by Backspace (one per typed scalar; each keystroke produced one) and types `text`.
-    private func replace(scalarCount: Int, with text: String) {
+    /// `fenceAtEnd` marks its last event as the end of the rewrite, when no delimiter follows.
+    private func replace(scalarCount: Int, with text: String, fenceAtEnd: Bool = false) {
         for _ in 0..<scalarCount {
             postKey(Key.delete, down: true)
             postKey(Key.delete, down: false)
@@ -280,7 +303,7 @@ final class Interceptor {
                 guard let e = CGEvent(keyboardEventSource: eventSource, virtualKey: 0, keyDown: down) else { continue }
                 e.keyboardSetUnicodeString(stringLength: chunk.count, unicodeString: chunk)
                 e.flags = []
-                post(e)
+                post(e, last: fenceAtEnd && !down && start + 16 >= units.count)
             }
         }
     }
@@ -314,6 +337,19 @@ final class Interceptor {
         fenceUp = false
         let events = heldEvents
         heldEvents.removeAll()
-        for event in events { event.post(tap: .cghidEventTap) }
+        let rebuild = switchedDuringFence
+        switchedDuringFence = false
+        for event in events {
+            // A key typed during a fix that switched layouts was meant for the new layout. Events
+            // built from a key code take their characters from the layout selected now.
+            if rebuild, let fresh = CGEvent(keyboardEventSource: nil,
+                                            virtualKey: CGKeyCode(event.getIntegerValueField(.keyboardEventKeycode)),
+                                            keyDown: event.type == .keyDown) {
+                fresh.flags = event.flags
+                fresh.post(tap: .cghidEventTap)
+            } else {
+                event.post(tap: .cghidEventTap)
+            }
+        }
     }
 }

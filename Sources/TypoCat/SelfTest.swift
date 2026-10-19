@@ -210,6 +210,86 @@ enum SelfTest {
         }
     }
 
+    /// Fixing Thai before Space. Recall: runs of 2-4 common Thai words typed on English with no
+    /// space; how many get fixed partway, and after how much of the run. False fixes: every prefix
+    /// of English the list doesn't know, as ranks 40001+ against a list cut at 40000, and of
+    /// common English words with one typo.
+    static func evaluateMidWord(top n: Int) {
+        let layouts = InputSources.installedLayouts()
+        guard let en = layouts[.english], let th = layouts[.thai],
+              let enURL = Dictionaries.url(for: .english), let enText = try? String(contentsOf: enURL, encoding: .utf8),
+              let thai = Dictionaries.load(.thai) else { print("needs English and Thai layouts and word lists"); return }
+        let lines = enText.split(separator: "\n")
+        let cut = FrequencyDictionary(contents: lines.prefix(40000).joined(separator: "\n"))
+        let detector = Detector(dictionaries: [.english: cut, .thai: thai])
+        if let m = ProcessInfo.processInfo.environment["LS_MIN"].flatMap(Int.init) { detector.midWordMinimumStrokes = m }
+        let pair = [Language.english: en, .thai: th]
+        var seed: UInt64 = 0x5459_5043
+        func random(_ bound: Int) -> Int {
+            seed = seed &* 6364136223846793005 &+ 1442695040888963407
+            return Int((seed >> 33) % UInt64(bound))
+        }
+        /// The first prefix of `strokes` that gets fixed, as a key count.
+        func firstFix(_ strokes: [KeyStroke]) -> (Int, Correction)? {
+            for k in 1...strokes.count {
+                let prefix = Array(strokes.prefix(k))
+                guard let typed = en.render(prefix) else { return nil }
+                if let fix = detector.decideMidWord(strokes: prefix, typed: typed, current: .english, layouts: pair) { return (k, fix) }
+            }
+            return nil
+        }
+
+        let common = ranked(.thai, n).filter { strokes(for: $0, in: th) != nil }
+        var runs = 0, fixedEarly = 0, wrongText = 0, shares: [Double] = []
+        for _ in 0..<2000 {
+            let words = (0..<(2 + random(3))).map { _ in common[random(common.count)] }
+            let run = words.joined()
+            guard let st = strokes(for: run, in: th) else { continue }
+            runs += 1
+            guard let (k, fix) = firstFix(st) else { continue }
+            if k < st.count { fixedEarly += 1; shares.append(Double(k) / Double(st.count)) }
+            if th.render(Array(st.prefix(k))) != fix.replacement { wrongText += 1 }
+        }
+        shares.sort()
+        let median = shares.isEmpty ? 0 : shares[shares.count / 2]
+        print(String(format: "Thai runs fixed before Space: %.1f%% of %d, median after %.0f%% of the keys (wrong text: %d)",
+                     100 * Double(fixedEarly) / Double(max(1, runs)), runs, 100 * median, wrongText))
+
+        func falseFixes(_ words: [String], _ label: String) {
+            var tried = 0, atSpace = 0
+            var fired: [String] = []
+            for word in words {
+                guard let st = strokes(for: word, in: en) else { continue }
+                tried += 1
+                // Already changed at Space without this: the early fix adds nothing new.
+                if detector.decide(strokes: st, typed: word, current: .english, layouts: pair) != nil { atSpace += 1; continue }
+                if let (k, fix) = firstFix(st) { fired.append("\(en.render(Array(st.prefix(k))) ?? "")→\(fix.replacement)") }
+            }
+            print(String(format: "%@: changed at Space %.2f%%, newly changed partway %.2f%% of %d  %@", label,
+                         100 * Double(atSpace) / Double(max(1, tried)), 100 * Double(fired.count) / Double(max(1, tried)),
+                         tried, fired.prefix(10).joined(separator: " ")))
+        }
+        let rare = lines.dropFirst(40000).prefix(10000).compactMap { $0.split(separator: " ").first.map(String.init) }
+            .filter { cut.count(of: $0) == 0 }
+        falseFixes(rare, "English the list doesn't know")
+        let typos = lines.prefix(n).compactMap { $0.split(separator: " ").first.map(String.init) }.filter { $0.count >= 4 }.map { word -> String in
+            var chars = Array(word)
+            let i = random(chars.count)
+            switch random(4) {
+            case 0: chars.remove(at: i)
+            case 1: if i + 1 < chars.count { chars.swapAt(i, i + 1) } else { chars.swapAt(i - 1, i) }
+            case 2: chars[i] = Array("etaoinshrdlucmfwypvbgkjqxz")[random(26)]
+            default: chars.insert(Array("etaoinshrdlucmfwypvbgkjqxz")[random(26)], at: i)
+            }
+            return String(chars)
+        }
+        falseFixes(typos, "English with one typo")
+        let numbers = (0..<2000).map { _ in String((0..<(6 + random(6))).map { _ in Character(String(random(10))) }) }
+        falseFixes(numbers, "Numbers")
+        let capitalized = lines.dropFirst(40000).prefix(3000).compactMap { $0.split(separator: " ").first.map { $0.capitalized } }
+        falseFixes(capitalized, "Capitalized unknown English")
+    }
+
     private static func measure(_ words: [String], intended: LayoutMap, wrong: LayoutMap, detector: Detector,
                                 layouts: [Language: LayoutMap]) -> (words: Int, rate: Double, changed: Int, misses: [String]) {
         var total = 0, fixed = 0, changed = 0

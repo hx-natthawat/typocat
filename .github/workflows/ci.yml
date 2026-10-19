@@ -31,7 +31,9 @@ jobs:
         run: .build/release/TypoCat --selftest
 
       - name: Detection accuracy
-        run: .build/release/TypoCat --eval 2000 | tee eval.txt
+        run: |
+          .build/release/TypoCat --eval 2000 | tee eval.txt
+          .build/release/TypoCat --eval-midword 2000 | tee -a eval.txt
 
       - name: Build app bundle
         run: ./scripts/build-app.sh
