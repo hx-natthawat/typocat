@@ -46,6 +46,10 @@ public final class Detector: @unchecked Sendable {
     /// Any language takes back a one-key word left alone before a fix ("ณ love" → "I love")
     /// when that letter is a word this common in it: about the top 10 words.
     public var singleKeyRereadScore = 0.95
+    /// Keys that type punctuation on one layout type letters on another (`[kp` is บาย on Thai).
+    /// When the typed text is only a word once that punctuation is stripped ("kp") and the
+    /// other rendering is all letters, the typed score counts this much.
+    public var strippedPunctuationWeight = 0.5
 
     public init(dictionaries: [Language: FrequencyDictionary]) {
         self.dictionaries = dictionaries
@@ -78,21 +82,25 @@ public final class Detector: @unchecked Sendable {
         guard force || strokes.count >= minimumStrokes, !ignored.contains(typed) else { return nil }
         if !force && ProtectedWords.contains(typed, in: category) { return nil }
         let typedScore = score(typed, as: current)
-        // Beyond the reject threshold only a clearly more common alternative can win.
-        let required = typedScore > rejectThreshold ? typedScore + dominanceMargin : 0
-        if !force && required > 1 { return nil }
+        let punctuated = Self.hasUnusualPunctuation(typed)
+        /// Beyond the reject threshold only a clearly more common alternative can win.
+        func beats(_ altScore: Double, typed typedScore: Double) -> Bool {
+            let required = typedScore > rejectThreshold ? typedScore + dominanceMargin : 0
+            return altScore >= acceptThreshold && altScore > typedScore && altScore >= required
+        }
 
-        var best: (Correction, Double)?
+        var best: (Correction, Double, wins: Bool)?
         for (language, layout) in layouts where language != current {
             guard let alt = layout.render(strokes), alt != typed else { continue }
             let s = score(alt, as: language)
+            let lettersOnly = punctuated && alt.unicodeScalars.allSatisfy(Self.isWordScalar)
+            let wins = beats(s, typed: lettersOnly ? typedScore * strippedPunctuationWeight : typedScore)
             if best == nil || s > best!.1 {
-                best = (Correction(original: typed, replacement: alt, from: current, to: language), s)
+                best = (Correction(original: typed, replacement: alt, from: current, to: language), s, wins)
             }
         }
-        guard let (correction, altScore) = best else { return nil }
-        if force { return correction }
-        return altScore >= acceptThreshold && altScore > typedScore && altScore >= required ? correction : nil
+        guard let best else { return nil }
+        return force || best.wins ? best.0 : nil
     }
 
     /// After a later word was fixed to `target`, decides whether an earlier word
@@ -109,6 +117,19 @@ public final class Detector: @unchecked Sendable {
         // Common words (นา, ทำ, go) stay: mixed-language text is normal. Rare ones (fu, z) may go.
         guard typedScore < rereadKeepScore else { return nil }
         return altScore >= acceptThreshold && altScore > typedScore ? alt : nil
+    }
+
+    /// Punctuation people put around words: "(word", "word,". Anything else at a word's edge
+    /// (`[kp`, `=kp`, `;hk;`) is more likely letters typed on the wrong layout.
+    private static let usualLeading = CharacterSet(charactersIn: "(\"'“‘«¿¡")
+    private static let usualTrailing = CharacterSet(charactersIn: ",.;:!?)\"'”’»…")
+
+    static func hasUnusualPunctuation(_ typed: String) -> Bool {
+        let scalars = Array(typed.unicodeScalars)
+        guard let first = scalars.firstIndex(where: { !edgePunctuation.contains($0) }),
+              let last = scalars.lastIndex(where: { !edgePunctuation.contains($0) }) else { return false }
+        return scalars[..<first].contains { !usualLeading.contains($0) }
+            || scalars[(last + 1)...].contains { !usualTrailing.contains($0) }
     }
 
     private static let edgePunctuation = CharacterSet.punctuationCharacters.union(.symbols)

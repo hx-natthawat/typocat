@@ -113,6 +113,16 @@ final class TypoCatCoreTests: XCTestCase {
         XCTAssertEqual(split.count(of: "ทำ"), 502)
     }
 
+    func testUnusualPunctuation() {
+        XCTAssertTrue(Detector.hasUnusualPunctuation("[kp")) // บาย on Thai
+        XCTAssertTrue(Detector.hasUnusualPunctuation("=kp"))
+        XCTAssertTrue(Detector.hasUnusualPunctuation(";hk;"))
+        XCTAssertFalse(Detector.hasUnusualPunctuation("look,"))
+        XCTAssertFalse(Detector.hasUnusualPunctuation("(word)"))
+        XCTAssertFalse(Detector.hasUnusualPunctuation("\"quoted\""))
+        XCTAssertFalse(Detector.hasUnusualPunctuation("plain"))
+    }
+
     func testThaiOrthographyRejectsNoise() {
         XCTAssertTrue(ThaiOrthography.isPlausible("สวัสดี"))
         XCTAssertFalse(ThaiOrthography.isPlausible("้ำสสน")) // starts with a tone mark

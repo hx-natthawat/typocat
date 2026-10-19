@@ -35,28 +35,28 @@ that get changed by mistake.
 
 | Language | Layout | Fixed (typed on EN) | EN fixed (typed on it) | Changed |
 |---|---|---|---|---|
-| Russian | Russian | 98.2% | 99.3% | 0.02% |
-| Ukrainian | Ukrainian | 97.2% | 99.3% | 0.03% |
-| Bulgarian | Bulgarian | 96.6% | 99.0% | 0.01% |
-| Serbian | Serbian | 88.7% | 78.6% | 0.08% |
-| Macedonian | Macedonian | 89.8% | 88.8% | 0.08% |
-| Kazakh | Kazakh | 99.2% | 99.8% | 0.00% |
-| Greek | Greek | 96.6% | 96.3% | 0.03% |
-| Hebrew | Hebrew | 93.7% | 96.9% | 0.02% |
-| Arabic | Arabic | 95.4% | 98.6% | 0.02% |
-| Persian | Persian | 93.2% | 98.7% | 0.07% |
-| Urdu | Urdu | 87.7% | 97.5% | 0.11% |
-| Armenian | Armenian HM QWERTY | 91.1% | 98.4% | 0.04% |
+| Russian | Russian | 99.0% | 99.3% | 0.02% |
+| Ukrainian | Ukrainian | 98.4% | 99.3% | 0.03% |
+| Bulgarian | Bulgarian | 98.4% | 99.0% | 0.01% |
+| Serbian | Serbian | 90.0% | 78.6% | 0.08% |
+| Macedonian | Macedonian | 91.0% | 88.8% | 0.08% |
+| Kazakh | Kazakh | 99.6% | 99.8% | 0.00% |
+| Greek | Greek | 97.1% | 96.3% | 0.03% |
+| Hebrew | Hebrew | 94.3% | 97.7% | 0.02% |
+| Arabic | Arabic | 97.3% | 98.7% | 0.02% |
+| Persian | Persian | 96.6% | 98.7% | 0.07% |
+| Urdu | Urdu | 88.2% | 97.5% | 0.11% |
+| Armenian | Armenian HM QWERTY | 91.1% | 98.4% | 0.06% |
 | Georgian | Georgian QWERTY | 93.4% | 98.1% | 0.01% |
-| Hindi | Devanagari | 92.7% | 99.0% | 0.10% |
-| Thai | Thai | 96.0% | 99.0% | 0.02% |
+| Hindi | Devanagari | 95.0% | 99.0% | 0.10% |
+| Thai | Thai | 98.4% | 99.0% | 0.02% |
 
 Most misses are two-letter words that are real words in both languages
 (`да`/`lf`, `το`/`to`). Serbian and Macedonian layouts are phonetic, so many
 English words are also valid Cyrillic words. The Serbian list is mostly Latin
 script and is transliterated to Cyrillic on load. Greek accents are typed with
 dead keys, which are supported. Thai (and other scripts without spaces) also
-rereads short words once a later word is fixed: 82% of missed short Thai words
+rereads short words once a later word is fixed: 79% of missed short Thai words
 are recovered.
 
 Adding a language: add its code to `Language.bundled` and to the list in

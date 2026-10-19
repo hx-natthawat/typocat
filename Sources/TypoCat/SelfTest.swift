@@ -101,6 +101,14 @@ enum SelfTest {
                          other.inputSourceID.padding(toLength: 36, withPad: " ", startingAt: 0),
                          a.rate, a.words, b.rate, b.words, changed))
             if !a.misses.isEmpty { print("      missed:", a.misses.joined(separator: " ")) }
+            // English with ordinary punctuation, typed correctly, must stay as it is.
+            let punctuated = ranked(.english, min(n, 2000)).flatMap { ["\($0),", "\($0).", "\($0);", "(\($0)", "\"\($0)", "'\($0)'"] }
+            let punctuatedChanged = punctuated.filter { w in
+                guard let st = strokes(for: w, in: en) else { return false }
+                return detector.decide(strokes: st, typed: w, current: .english, layouts: pair) != nil
+            }
+            print(String(format: "      punctuated English changed: %.2f%% of %d %@", 100 * Double(punctuatedChanged.count) / Double(max(1, punctuated.count)),
+                         punctuated.count, punctuatedChanged.prefix(6).joined(separator: " ")))
 
             // One-key words left before a fix to English: those that would be taken back.
             let singles = Set(other.inverse().values.filter { $0.count == 1 }.compactMap { strokes -> String? in
