@@ -32,19 +32,18 @@ enum UpdateCheck {
         let alert = NSAlert()
         let newer = latest.map { isNewer($0, than: currentVersion) } ?? false
         if let latest, newer {
-            alert.messageText = "TypoCat \(latest) is available"
-            alert.informativeText = "You have \(currentVersion). Download the new TypoCat.dmg and drag it into Applications. "
-                + "Afterwards, turn TypoCat off and on again in Accessibility settings if it stops fixing words."
-            alert.addButton(withTitle: "Download")
-            alert.addButton(withTitle: "Later")
+            alert.messageText = String(format: L("TypoCat %@ is available"), latest)
+            alert.informativeText = String(format: L("You have %@. Download the new TypoCat.dmg and drag it into Applications. Afterwards, turn TypoCat off and on again in Accessibility settings if it stops fixing words."), currentVersion)
+            alert.addButton(withTitle: L("Download"))
+            alert.addButton(withTitle: L("Later"))
         } else if latest != nil {
-            alert.messageText = "TypoCat is up to date"
-            alert.informativeText = "You have the latest version, \(currentVersion)."
+            alert.messageText = L("TypoCat is up to date")
+            alert.informativeText = String(format: L("You have the latest version, %@."), currentVersion)
         } else {
-            alert.messageText = "Couldn't check for updates"
-            alert.informativeText = failed ? "Check your internet connection and try again." : "No release was found on GitHub."
+            alert.messageText = L("Couldn't check for updates")
+            alert.informativeText = failed ? L("Check your internet connection and try again.") : L("No release was found on GitHub.")
             alert.addButton(withTitle: "OK")
-            alert.addButton(withTitle: "Open Releases Page")
+            alert.addButton(withTitle: L("Open Releases Page"))
         }
         NSApp.activate(ignoringOtherApps: true)
         let response = alert.runModal()

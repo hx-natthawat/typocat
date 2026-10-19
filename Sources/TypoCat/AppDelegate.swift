@@ -8,17 +8,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let store = UserStore()
     private var interceptor: Interceptor!
     private var statusItem: NSStatusItem!
-    private var lastCorrectionItem = NSMenuItem(title: "No corrections yet", action: nil, keyEquivalent: "")
+    private var lastCorrectionItem = NSMenuItem(title: L("No corrections yet"), action: nil, keyEquivalent: "")
     private var permissionItem = NSMenuItem(title: "", action: #selector(openAccessibilitySettings), keyEquivalent: "")
-    private var enabledItem = NSMenuItem(title: "Enabled", action: #selector(toggleEnabled), keyEquivalent: "")
+    private var enabledItem = NSMenuItem(title: L("Enabled"), action: #selector(toggleEnabled), keyEquivalent: "")
     private var excludeItem = NSMenuItem(title: "", action: #selector(toggleExcludeFrontApp), keyEquivalent: "")
-    private var matchLayoutItem = NSMenuItem(title: "Match layout to each app", action: #selector(toggleMatchLayout),
+    private var matchLayoutItem = NSMenuItem(title: L("Match layout to each app"), action: #selector(toggleMatchLayout),
                                              keyEquivalent: "")
-    private var matchSiteItem = NSMenuItem(title: "Match layout to each website", action: #selector(toggleMatchSite),
+    private var matchSiteItem = NSMenuItem(title: L("Match layout to each website"), action: #selector(toggleMatchSite),
                                            keyEquivalent: "")
-    private var typoItem = NSMenuItem(title: "Fix typos (beta)", action: #selector(toggleFixTypos), keyEquivalent: "")
-    private var loginItem = NSMenuItem(title: "Open at login", action: #selector(toggleOpenAtLogin), keyEquivalent: "")
-    private var learnItem = NSMenuItem(title: "Learn words I convert with ⌃⌥Space", action: #selector(toggleLearnWords),
+    private var typoItem = NSMenuItem(title: L("Fix typos (beta)"), action: #selector(toggleFixTypos), keyEquivalent: "")
+    private var loginItem = NSMenuItem(title: L("Open at login"), action: #selector(toggleOpenAtLogin), keyEquivalent: "")
+    private var learnItem = NSMenuItem(title: L("Learn words I convert with ⌃⌥Space"), action: #selector(toggleLearnWords),
                                        keyEquivalent: "")
     private var forgetItem = NSMenuItem(title: "", action: #selector(forgetLearnedWords), keyEquivalent: "")
     /// The last app that wasn't us; opening our menu doesn't change it.
@@ -39,7 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         interceptor = Interceptor(detector: Detector(dictionaries: [:]),
                                   inputSources: inputSources, store: store)
         interceptor.onCorrection = { [weak self] c in
-            self?.lastCorrectionItem.title = "Last: \(c.original) → \(c.replacement)"
+            self?.lastCorrectionItem.title = String(format: L("Last: %@ → %@"), c.original, c.replacement)
             self?.setup.lastFix = "\(c.original) → \(c.replacement)"
         }
         interceptor.onManualConversion = { [weak self] c in
@@ -118,7 +118,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             setup.trusted = true
             return
         }
-        permissionItem.title = "Grant Accessibility access…"
+        permissionItem.title = L("Grant Accessibility access…")
         permissionItem.isHidden = false
         permissionTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] timer in
             guard let self, AXIsProcessTrusted(), self.interceptor.start() else { return }
@@ -166,20 +166,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(permissionItem)
         menu.addItem(.separator())
         menu.addItem(lastCorrectionItem)
-        let hint = NSMenuItem(title: "⌃⌥Space converts the current word", action: nil, keyEquivalent: "")
+        let hint = NSMenuItem(title: L("⌃⌥Space converts the current word"), action: nil, keyEquivalent: "")
         hint.isEnabled = false
         menu.addItem(hint)
         menu.addItem(.separator())
-        let setupItem = NSMenuItem(title: "Setup…", action: #selector(showSetup), keyEquivalent: "")
+        let setupItem = NSMenuItem(title: L("Setup…"), action: #selector(showSetup), keyEquivalent: "")
         setupItem.target = self
         menu.addItem(setupItem)
-        let updates = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
+        let updates = NSMenuItem(title: L("Check for Updates…"), action: #selector(checkForUpdates), keyEquivalent: "")
         updates.target = self
         menu.addItem(updates)
-        let about = NSMenuItem(title: "About TypoCat", action: #selector(showAbout), keyEquivalent: "")
+        let about = NSMenuItem(title: L("About TypoCat"), action: #selector(showAbout), keyEquivalent: "")
         about.target = self
         menu.addItem(about)
-        menu.addItem(NSMenuItem(title: "Quit TypoCat", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        menu.addItem(NSMenuItem(title: L("Quit TypoCat"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         statusItem.menu = menu
         refreshTitle()
     }
@@ -189,8 +189,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let active = interceptor.enabled && !store.isExcluded(frontApp?.bundleIdentifier)
         statusItem.button?.title = active ? lang : "\(lang)·off"
         statusItem.button?.appearsDisabled = !active
-        let name = frontApp?.localizedName ?? "this app"
-        excludeItem.title = "Disable in \(name)"
+        let name = frontApp?.localizedName ?? L("this app")
+        excludeItem.title = String(format: L("Disable in %@"), name)
         excludeItem.state = store.isExcluded(frontApp?.bundleIdentifier) ? .on : .off
         excludeItem.isHidden = frontApp?.bundleIdentifier == nil
     }
@@ -273,11 +273,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Credits include the word lists' CC BY-SA attribution, which redistribution requires.
     @objc private func showAbout() {
         let text = [
-            "Fixes words typed on the wrong keyboard layout.",
-            "Open source under the MIT license: github.com/hx-natthawat/typocat",
+            L("Fixes words typed on the wrong keyboard layout."),
+            L("Open source under the MIT license: github.com/hx-natthawat/typocat"),
             "",
-            "Word lists: FrequencyWords by Hermit Dave (github.com/hermitdave/FrequencyWords),",
-            "licensed CC BY-SA 4.0, built from OpenSubtitles.",
+            L("Word lists: FrequencyWords by Hermit Dave (github.com/hermitdave/FrequencyWords), licensed CC BY-SA 4.0, built from OpenSubtitles."),
         ].joined(separator: "\n")
         let credits = NSAttributedString(string: text, attributes: [
             .font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.labelColor,
@@ -306,7 +305,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func refreshLearnItems() {
         learnItem.state = store.learnWords ? .on : .off
         let n = store.learnedWordCount
-        forgetItem.title = n == 1 ? "Forget 1 learned word" : "Forget \(n) learned words"
+        forgetItem.title = n == 1 ? L("Forget 1 learned word") : String(format: L("Forget %d learned words"), n)
         forgetItem.isHidden = !store.learnWords || n == 0
     }
 
@@ -379,6 +378,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 }
+
+/// A user-facing string in the user's language: Resources/<language>.lproj/Localizable.strings.
+func L(_ key: String) -> String { NSLocalizedString(key, comment: "") }
 
 enum Dictionaries {
     /// Looks in the app bundle first (compiled by build-app.sh), then ./Data for `swift run` during development.

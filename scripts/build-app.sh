@@ -14,6 +14,8 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp .build/release/TypoCat "$APP/Contents/MacOS/"
 cp Resources/AppIcon.icns Resources/Manee.png "$APP/Contents/Resources/"
+# Translations: Resources/<language>.lproj/Localizable.strings, keyed by the English text.
+cp -R Resources/*.lproj "$APP/Contents/Resources/"
 # Word lists are compiled to .tcdict, which the app maps from disk instead of parsing at launch.
 for f in Data/*_50k.txt; do
   name=$(basename "$f" .txt)
@@ -27,6 +29,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <plist version="1.0">
 <dict>
   <key>CFBundleExecutable</key><string>TypoCat</string>
+  <key>CFBundleDevelopmentRegion</key><string>en</string>
   <key>CFBundleIdentifier</key><string>com.typocat.app</string>
   <key>CFBundleName</key><string>TypoCat</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>

@@ -39,8 +39,12 @@ final class SetupWindowController: NSWindowController {
         window.titleVisibility = .hidden
         window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
-        window.title = "Set up TypoCat"
-        window.contentView = NSHostingView(rootView: SetupView(model: model))
+        window.title = L("Set up TypoCat")
+        // The window takes the view's height, which depends on the language and on progress.
+        let hosting = NSHostingView(rootView: SetupView(model: model))
+        hosting.sizingOptions = [.intrinsicContentSize]
+        window.contentView = hosting
+        window.setContentSize(hosting.fittingSize)
         window.center()
         self.init(window: window)
     }
@@ -78,17 +82,18 @@ private struct SetupView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            VStack(spacing: 12) {
+            VStack(spacing: 10) {
                 step(1, "Let TypoCat see your typing", done: model.trusted) { permission }
                 step(2, "Your keyboards", done: model.layouts.filter(\.hasWordList).count >= 2) { keyboards }
                 step(3, "Try it", done: model.lastFix != nil) { tryIt }
                 step(4, "Options", done: nil) { options }
             }
             .padding(.horizontal, 24)
-            Spacer(minLength: 12)
-            footer
+            footer.padding(.top, 16)
         }
-        .frame(width: 540, height: 770)
+        // As tall as the content: translations run longer than English.
+        .frame(width: 540)
+        .fixedSize(horizontal: false, vertical: true)
         .background(Brand.page)
         .foregroundColor(Brand.ink)
     }
@@ -96,21 +101,21 @@ private struct SetupView: View {
     private var header: some View {
         VStack(spacing: 6) {
             if let url = Bundle.main.url(forResource: "Manee", withExtension: "png"), let image = NSImage(contentsOf: url) {
-                Image(nsImage: image).resizable().frame(width: 112, height: 112)
+                Image(nsImage: image).resizable().frame(width: 84, height: 84)
                     .shadow(color: .black.opacity(0.18), radius: 10, y: 5)
             } else {
-                Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 112, height: 112)
+                Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 84, height: 84)
             }
-            (Text("Typo") + Text("Cat").foregroundColor(Brand.marigold))
+            (Text(verbatim: "Typo") + Text(verbatim: "Cat").foregroundColor(Brand.marigold))
                 .font(.system(size: 30, weight: .bold, design: .rounded))
             Text("Typed on the wrong keyboard? Keep typing. Manee fixes the word when you press Space.")
                 .font(.system(size: 13)).multilineTextAlignment(.center).opacity(0.75)
                 .frame(maxWidth: 420).fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.top, 34).padding(.bottom, 18)
+        .padding(.top, 22).padding(.bottom, 14)
     }
 
-    private func step<Content: View>(_ n: Int, _ title: String, done: Bool?,
+    private func step<Content: View>(_ n: Int, _ title: LocalizedStringKey, done: Bool?,
                                      @ViewBuilder content: () -> Content) -> some View {
         HStack(alignment: .top, spacing: 12) {
             ZStack {
@@ -127,14 +132,14 @@ private struct SetupView: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(14)
+        .padding(12)
         .background(RoundedRectangle(cornerRadius: 14).fill(Brand.card))
         .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
     }
 
     @ViewBuilder private var permission: some View {
         if model.trusted {
-            Text("Accessibility access is on. TypoCat never saves or sends what you type.").opacity(0.75)
+            Text("Accessibility access is on. What you type never leaves this Mac.").opacity(0.75)
         } else {
             Text("Turn on TypoCat in System Settings → Privacy & Security → Accessibility. This window updates by itself.")
                 .opacity(0.75).fixedSize(horizontal: false, vertical: true)
@@ -152,7 +157,7 @@ private struct SetupView: View {
                     .padding(.horizontal, 5).padding(.vertical, 2)
                     .background(RoundedRectangle(cornerRadius: 4).fill(layout.hasWordList ? Brand.lagoon : .gray))
                     .foregroundColor(layout.hasWordList ? Brand.onLagoon : .white)
-                Text(layout.hasWordList ? layout.name : "\(layout.name) (not supported)")
+                layout.hasWordList ? Text(verbatim: layout.name) : Text("\(layout.name) (not supported)")
             }
             .padding(.horizontal, 8).padding(.vertical, 5)
             .background(Capsule().fill(Brand.ink.opacity(0.06)))
@@ -168,8 +173,8 @@ private struct SetupView: View {
 
     @ViewBuilder private var tryIt: some View {
         if let example = model.example {
-            (Text("Switch to ") + Text(example.layout).bold() + Text(", type ") + Text(example.word).bold()
-                + Text(" with the same keys you'd use in English, then press Space."))
+            // One string with markdown, so translations can put the names where their grammar wants.
+            Text("Switch to **\(example.layout)**, type **\(example.word)** with the same keys you'd use in English, then press Space.")
                 .opacity(0.75).fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 8) {
                 // A space first, so a leading combining mark (Thai ้) has a base to sit on.
@@ -193,11 +198,16 @@ private struct SetupView: View {
     }
 
     @ViewBuilder private var options: some View {
-        Toggle("Open at login", isOn: binding(\.openAtLogin, model.setOpenAtLogin))
-        Toggle("Match the keyboard to each app", isOn: binding(\.matchLayout, model.setMatchLayout))
-        Toggle("Match the keyboard to each website (keeps site names on this Mac)", isOn: binding(\.matchSite, model.setMatchSite))
-        Toggle("Fix typos too (beta): recieve → receive", isOn: binding(\.fixTypos, model.setFixTypos))
-        Toggle("Learn words I convert with ⌃⌥Space (saved on this Mac only)", isOn: binding(\.learnWords, model.setLearnWords))
+        option("Open at login", binding(\.openAtLogin, model.setOpenAtLogin))
+        option("Match the keyboard to each app", binding(\.matchLayout, model.setMatchLayout))
+        option("Match the keyboard to each website (keeps site names on this Mac)", binding(\.matchSite, model.setMatchSite))
+        option("Fix typos too (beta): recieve → receive", binding(\.fixTypos, model.setFixTypos))
+        option("Learn words I convert with ⌃⌥Space (saved on this Mac only)", binding(\.learnWords, model.setLearnWords))
+    }
+
+    /// A toggle whose label wraps instead of being cut off.
+    private func option(_ title: LocalizedStringKey, _ isOn: Binding<Bool>) -> some View {
+        Toggle(isOn: isOn) { Text(title).fixedSize(horizontal: false, vertical: true) }
     }
 
     private func binding(_ key: ReferenceWritableKeyPath<SetupModel, Bool>, _ set: @escaping (Bool) -> Void) -> Binding<Bool> {
@@ -207,9 +217,9 @@ private struct SetupView: View {
     private var footer: some View {
         HStack {
             Text("⌃⌥Space converts the word you're typing. Undo a fix with Backspace.")
-                .font(.system(size: 11)).opacity(0.6)
+                .font(.system(size: 11)).opacity(0.6).fixedSize(horizontal: false, vertical: true)
             Spacer()
-            Button(model.trusted ? "Done" : "Later") { model.done() }
+            Button(model.trusted ? LocalizedStringKey("Done") : "Later") { model.done() }
                 .buttonStyle(Pill(color: model.trusted ? Brand.lagoon : Brand.ink.opacity(0.35),
                                   text: model.trusted ? Brand.onLagoon : .white))
                 .keyboardShortcut(.defaultAction)

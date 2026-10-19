@@ -47,6 +47,26 @@ if let i = CommandLine.arguments.firstIndex(of: "--site-probe") {
     print(host == nil ? "unreadable" : host == args[1] ? "match" : "other site")
     exit(0)
 }
+// Renders the setup window to a PNG, to check layouts and translations:
+// `build/TypoCat.app/Contents/MacOS/TypoCat --render-setup out.png -AppleLanguages '(de)'`
+if let i = CommandLine.arguments.firstIndex(of: "--render-setup"), i + 1 < CommandLine.arguments.count {
+    _ = NSApplication.shared
+    let model = SetupModel()
+    model.trusted = false
+    model.layouts = [.init(language: .english, name: "ABC", hasWordList: true),
+                     .init(language: .thai, name: "Thai", hasWordList: true),
+                     .init(language: Language(rawValue: "ja"), name: "Japanese", hasWordList: false)]
+    model.example = ("hello", "้ำสสน", "Thai")
+    model.lastFix = "l;ylfu → สวัสดี"
+    let window = SetupWindowController(model: model).window!
+    let view = window.contentView!
+    view.setFrameSize(view.fittingSize)
+    view.layoutSubtreeIfNeeded()
+    let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds)!
+    view.cacheDisplay(in: view.bounds, to: rep)
+    try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: CommandLine.arguments[i + 1]))
+    exit(0)
+}
 if let i = CommandLine.arguments.firstIndex(of: "--eval-typos") {
     SelfTest.evaluateTypos(top: CommandLine.arguments.dropFirst(i + 1).first.flatMap { Int($0) } ?? 5000)
     exit(0)
