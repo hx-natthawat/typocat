@@ -38,11 +38,14 @@ public final class Detector: @unchecked Sendable {
     /// ...and at least this many times as frequent as the next candidate. 10 instead of 3
     /// cuts English wrong-word fixes from 4.8% to 1.9% of typos for 3 points of fix rate.
     public var typoDominance = 10.0
-    /// Whether earlier words may be reread into a language. On the top 5000 words, rereading
-    /// into Thai recovers ~80% of missed short words with 0.5% false changes; into English it
-    /// recovers few words and changes ~3% of correct short Thai words. Languages written with
-    /// spaces rarely leave short words behind, so only spaceless scripts get rereading.
-    public var rereadsInto: @Sendable (Language) -> Bool = { $0.writesWithoutSpaces }
+    /// Whether earlier words may be reread into a language. `LS_REREAD_ALL=1 --eval 5000`
+    /// measures it for every language: missed short words recovered against correct short
+    /// English words changed. Allowed where the latter stays at 0.5% or less: Thai (and other
+    /// spaceless scripts: 79% recovered), Russian (85%) and Kazakh (79%). Elsewhere it changes
+    /// 1-9% of correct English words (Serbian 6.7%, Macedonian 8.8%); into English, ~3% of Thai.
+    public var rereadsInto: @Sendable (Language) -> Bool = {
+        $0.writesWithoutSpaces || ["ru", "kk"].contains($0.rawValue)
+    }
     /// Any language takes back a one-key word left alone before a fix ("ณ love" → "I love")
     /// when that letter is a word this common in it: about the top 10 words.
     public var singleKeyRereadScore = 0.95

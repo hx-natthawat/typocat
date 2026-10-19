@@ -57,9 +57,14 @@ Most misses are two-letter words that are real words in both languages
 (`да`/`lf`, `το`/`to`). Serbian and Macedonian layouts are phonetic, so many
 English words are also valid Cyrillic words. The Serbian list is mostly Latin
 script and is transliterated to Cyrillic on load. Greek accents are typed with
-dead keys, which are supported. Thai (and other scripts without spaces) also
-rereads short words once a later word is fixed: 79% of missed short Thai words
-are recovered.
+dead keys, which are supported.
+
+Short words left alone are reread once a later word is fixed into the same
+language (`lf ghbdtn` → `да привет`). That's on for Thai (79% of missed short
+words recovered), Russian (85%) and Kazakh (79%), where it changes 0.5% of
+correct short English words or fewer. In the other languages it would change
+1–9% of correct English words, so it stays off; `LS_REREAD_ALL=1 swift run
+TypoCat --eval 5000` measures it.
 
 Adding a language: add its code to `Language.bundled` and to the list in
 `scripts/build-app.sh`, run `--eval`, and add a few words to `SelfTest`.
@@ -176,7 +181,7 @@ password boxes. The only network request is Check for Updates…, when you pick 
 
 ## Roadmap
 
-- Use the surrounding words to settle ambiguous short words (`so`/`หน`, `ok`/`นา`).
+- Settle ambiguous short words from context in the languages where rereading is still off (Serbian, Macedonian, Greek).
 - Detect Thai mid-phrase, before a space is typed.
 - Learn the user's own vocabulary.
 - Remember the language per website in browsers.

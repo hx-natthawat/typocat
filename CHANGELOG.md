@@ -12,6 +12,7 @@
 - `scripts/make-dmg.sh` builds `build/TypoCat.dmg`, a drag-to-Applications installer with a background that explains the first-open steps.
 - App icon: a cute 3D Manee peeking over the spacebar. The menu bar shows a matching cat-head glyph next to the layout code and dims when TypoCat is off.
 - Social preview banner, and `scripts/make-brand-assets.sh` to render the icon and banner from `docs/brand/app-icon.svg`.
+- Russian and Kazakh reread short words once a later word is fixed (`lf ghbdtn` → `да привет`), as Thai does: 85% and 79% of missed short words recovered, 0.5% of correct short English words changed. `LS_REREAD_ALL=1 --eval` measures every language.
 - Fixed: English in single quotes ('to', 'a') was changed to Hebrew or Arabic, where the ' key types a letter: 0.93% of quoted words with Hebrew enabled, now 0.01%.
 - Keys that type punctuation in English but letters elsewhere (`[kp` is บาย, `=kp` is ชาย) no longer hide a wrong-layout word: 1–4 points more words fixed (Thai 96.0% → 98.4%, Persian 93.2% → 96.6%), with no more correct text changed. `--eval` now also checks English with ordinary punctuation (`look,`, `(word`).
 - Word lists are compiled at build time and mapped from disk: they load in under 10 ms instead of 0.6–2.7 s, and the app uses 14 MB with English + Thai (was 19–21 MB, and 59 MB with 7 languages before that). Detection results are unchanged.

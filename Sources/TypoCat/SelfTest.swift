@@ -119,8 +119,11 @@ enum SelfTest {
             }).sorted()
             print("      one-key words reread into English:", singles.isEmpty ? "none" : singles.joined(separator: " "))
 
-            // Spaceless scripts: short words left alone, recovered once a later word is fixed.
-            guard detector.rereadsInto(language) else { continue }
+            // Short words left alone, recovered once a later word is fixed. Measured for every
+            // language; only those `rereadsInto` accepts get it in the app. LS_REREAD_ALL=1 tries all.
+            let rereadAll = ProcessInfo.processInfo.environment["LS_REREAD_ALL"] == "1"
+            if rereadAll { detector.rereadsInto = { _ in true } }
+            guard rereadAll || detector.rereadsInto(language) else { continue }
             let missedShort = ranked(language, n).filter { w in
                 guard let st = strokes(for: w, in: other), (2...3).contains(st.count), let typed = en.render(st) else { return false }
                 return detector.decide(strokes: st, typed: typed, current: .english, layouts: pair)?.replacement != w
