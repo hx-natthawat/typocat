@@ -34,7 +34,9 @@ enum SelfTest {
             // A second layout for the same language: Dvorak or Colemak next to QWERTY.
             ("hello", "en+dvorak", "en", true), ("people", "en", "en+dvorak", true), ("meeting", "en+colemak", "en", true),
             // From Data/extra: everyday words the subtitle lists lack.
-            ("ลาย", "th", "en", true), ("ภาษี", "th", "en", true), ("скриншот", "ru", "en", true), ("benutzername", "de", "en", true), ("télétravail", "fr", "en", true),
+            ("ลาย", "th", "en", true), ("ภาษี", "th", "en", true), ("скриншот", "ru", "en", true),
+            // Korean 2-Set: letters join into syllables, so the typed text is shorter than the keys.
+            ("안녕하세요", "ko", "en", true), ("감사합니다", "ko", "en", true), ("hello", "en", "ko", true), ("benutzername", "de", "en", true), ("télétravail", "fr", "en", true),
         ]
         let languages = Set(cases.flatMap { [Language(rawValue: $0.language), Language(rawValue: $0.other)] })
         let detector = Dictionaries.makeDetector(for: languages)
@@ -337,11 +339,6 @@ enum SelfTest {
     private static func strokes(for text: String, in layout: LayoutMap) -> [KeyStroke]? {
         let inverse = inverses[layout.inputSourceID] ?? layout.inverse()
         inverses[layout.inputSourceID] = inverse
-        var out: [KeyStroke] = []
-        for scalar in text.unicodeScalars {
-            guard let k = inverse[String(scalar)] else { return nil }
-            out += k
-        }
-        return out
+        return layout.strokes(typing: text, inverse: inverse)
     }
 }

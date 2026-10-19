@@ -226,6 +226,31 @@ final class TypoCatCoreTests: XCTestCase {
         XCTAssertNil(d.decide(strokes: strokes([0, 2, 3]), typed: "to;", current: .english, layouts: pair))
     }
 
+    func testHangulJoinsLettersIntoSyllables() {
+        XCTAssertEqual(Hangul.compose("ㅇㅏㄴㄴㅕㅇ"), "안녕")
+        XCTAssertEqual(Hangul.compose("ㄷㅏㄹㄱ"), "닭")            // compound final
+        XCTAssertEqual(Hangul.compose("ㄷㅏㄹㄱㅇㅣ"), "닭이")
+        XCTAssertEqual(Hangul.compose("ㄷㅏㄹㄱㅣ"), "달기")        // a vowel takes the second half
+        XCTAssertEqual(Hangul.compose("ㄱㅏㄴㅏ"), "가나")          // the final moves on
+        XCTAssertEqual(Hangul.compose("ㄱㅗㅏㄴ"), "관")            // compound vowel
+        XCTAssertEqual(Hangul.compose("ㅗㄷㅣㅣㅐ"), "ㅗ디ㅣㅐ")    // "hello" on 2-Set
+        XCTAssertEqual(Hangul.compose("ㅃㅏㄹㄹㅣ"), "빨리")
+        XCTAssertEqual(Hangul.compose("ㅇㅏ ㄴㅔ!"), "아 네!")
+        XCTAssertEqual(Hangul.keyLetters("닭이 관"), "ㄷㅏㄹㄱㅇㅣ ㄱㅗㅏㄴ")
+        for word in ["안녕하세요", "감사합니다", "괜찮아", "읽었어", "없는", "앉아", "뭐", "의사"] {
+            XCTAssertEqual(Hangul.compose(Hangul.keyLetters(word)), word)
+        }
+    }
+
+    func testKoreanTypedOnUSKeys() {
+        let ko = Hangul.twoSetLayout(over: nil)
+        let keys = ko.strokes(typing: "안녕")!
+        XCTAssertEqual(keys.map(\.keyCode), [2, 40, 1, 1, 32, 2]) // d k s s u d
+        XCTAssertEqual(ko.render(keys), "안녕")
+        XCTAssertEqual(ko.render(ko.strokes(typing: "ㅗ디ㅣㅐ")!), "ㅗ디ㅣㅐ")
+        XCTAssertEqual(ko.render(strokes([15]).map { KeyStroke(keyCode: $0.keyCode, shift: true) }), "ㄲ")
+    }
+
     func testLearnedWordsCount() {
         let d = detector()
         let keys = strokes([3, 4, 5]) // o w r on "en", щ ц к on "ru"

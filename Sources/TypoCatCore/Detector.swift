@@ -124,6 +124,8 @@ public final class Detector: @unchecked Sendable {
             // (Greek "ά" is ";a"); gibberish may ("@john").
             if typedScore > 0 && !punctuated
                 && (Self.coreLength(alt) < Self.coreLength(typed) || Self.hasUnusualPunctuation(alt)) { continue }
+            // Likewise into a word capitalized inside ("wOrk"): Shift types ㅒ and ㄲ in Korean.
+            if typedScore > 0 && Self.hasInnerCapital(alt) && !Self.hasInnerCapital(typed) { continue }
             let s = score(alt, as: language)
             let lettersOnly = punctuated && alt.unicodeScalars.allSatisfy(Self.isWordScalar)
             // Ordinary punctuation can be letters too: Finnish "työ" is "ty;" on US, "älä" is "'l'".
@@ -190,6 +192,13 @@ public final class Detector: @unchecked Sendable {
               let last = scalars.lastIndex(where: { !edgePunctuation.contains($0) }) else { return false }
         return scalars[..<first].contains { !usualLeading.contains($0) }
             || scalars[(last + 1)...].contains { !usualTrailing.contains($0) }
+    }
+
+    /// A capital after a lowercase letter: "wOrk", "iPhone".
+    static func hasInnerCapital(_ text: String) -> Bool {
+        zip(text.unicodeScalars, text.unicodeScalars.dropFirst()).contains {
+            $0.properties.isLowercase && $1.properties.isUppercase
+        }
     }
 
     /// The form a learned word is kept in: lowercase, without edge punctuation.

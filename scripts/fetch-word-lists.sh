@@ -6,7 +6,7 @@ cd "$(dirname "$0")/.."
 mkdir -p Data
 
 # Language.bundled: English, non-Latin layouts, and Latin layouts that move letters.
-LANGS="${*:-en ru uk bg sr mk kk el he ar fa ur hy ka hi th fr de es it tr cs sv hu da fi}"
+LANGS="${*:-en ru uk bg sr mk kk el he ar fa ur hy ka hi th ko fr de es it tr cs sv hu da fi}"
 BASE=https://raw.githubusercontent.com/hermitdave/FrequencyWords/master/content/2018
 tmp=$(mktemp)
 trap 'rm -f "$tmp"' EXIT

@@ -215,11 +215,22 @@ final class Interceptor {
         strokes.removeAll()
         DispatchQueue.main.async {
             guard FocusedText.check(endsWith: correction.original) != .mismatch else { return }
-            self.replace(scalarCount: correction.original.unicodeScalars.count, with: correction.replacement)
-            self.inputSources.select(correction.to)
-            self.onCorrection?(correction)
-            self.onManualConversion?(correction)
+            self.committingComposition(from: correction) {
+                self.replace(scalarCount: correction.original.unicodeScalars.count, with: correction.replacement)
+                self.inputSources.select(correction.to)
+                self.onCorrection?(correction)
+                self.onManualConversion?(correction)
+            }
         }
+    }
+
+    /// Korean's input method still holds the last syllable while it may grow (녀 → 녕), and
+    /// Backspace there removes one letter, not the syllable. Switching layouts first makes it
+    /// commit the syllable, so the Backspaces that follow erase whole ones.
+    private func committingComposition(from correction: Correction, then work: @escaping () -> Void) {
+        guard inputSources.composes(correction.from), correction.from != correction.to else { return work() }
+        select(correction.to)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08, execute: work)
     }
 
     /// A same-language spelling fix, when enabled and macOS agrees with it.
@@ -262,12 +273,14 @@ final class Interceptor {
             return
         }
         record(correction.to)
-        replace(scalarCount: correction.original.unicodeScalars.count, with: correction.replacement,
-                fenceAtEnd: delimiter == nil)
-        select(correction.to)
-        if let delimiter { post(delimiter, last: true) }
         lastCorrection = (correction, delimiter, word)
-        onCorrection?(correction)
+        committingComposition(from: correction) {
+            self.replace(scalarCount: correction.original.unicodeScalars.count, with: correction.replacement,
+                         fenceAtEnd: delimiter == nil)
+            self.select(correction.to)
+            if let delimiter { self.post(delimiter, last: true) }
+            self.onCorrection?(correction)
+        }
     }
 
     private func undo(_ correction: Correction, delimiter: CGEvent?, word: String) {

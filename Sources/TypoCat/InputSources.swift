@@ -22,7 +22,10 @@ final class InputSources {
             kTISPropertyInputSourceIsSelectCapable as String: true,
         ] as CFDictionary
         guard let list = TISCreateInputSourceList(filter, false)?.takeRetainedValue() as? [TISInputSource] else { return }
+        var korean: TISInputSource?
         for source in list {
+            // Korean is an input method with no key map to read; it's built once U.S. keys are known.
+            if Hangul.isTwoSet(Self.idOf(source)) { korean = korean ?? source; continue }
             guard let base = Self.language(of: source), var map = Self.buildMap(source: source, language: base) else { continue }
             var language = base
             if let first = layouts[base] {
@@ -37,7 +40,18 @@ final class InputSources {
             keys[Self.idOf(source)] = language
             names[language] = Self.property(source, kTISPropertyLocalizedName) ?? language.shortName
         }
+        if let korean, layouts[Hangul.language] == nil {
+            let language = Hangul.language
+            sources[language] = korean
+            layouts[language] = Hangul.twoSetLayout(over: layouts[.english], inputSourceID: Self.idOf(korean))
+            keys[Self.idOf(korean)] = language
+            names[language] = Self.property(korean, kTISPropertyLocalizedName) ?? "2-Set Korean"
+        }
     }
+
+    /// Whether `language` is typed through an input method that holds letters while it joins
+    /// them (Korean): its last syllable must be committed before Backspace can erase whole ones.
+    func composes(_ language: Language) -> Bool { layouts[language]?.joinsHangul ?? false }
 
     func currentLanguage() -> Language? {
         guard let source = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue() else { return nil }
@@ -86,6 +100,8 @@ final class InputSources {
                 out[language] = map
             }
         }
+        // Korean has no key map; 2-Set is built in, so it's measured even when not installed.
+        out[Hangul.language] = Hangul.twoSetLayout(over: out[.english])
         return out
     }
 

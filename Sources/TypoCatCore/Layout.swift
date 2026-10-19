@@ -31,7 +31,7 @@ public struct Language: RawRepresentable, Hashable, Sendable, CustomStringConver
     /// a non-Latin script, where wrong-layout typing turns into gibberish, and Latin layouts that
     /// move letters (AZERTY, QWERTZ, ä ö ü on punctuation keys).
     public static let bundled: [Language] = ["en", "ru", "uk", "bg", "sr", "mk", "kk", "el", "he", "ar", "fa",
-                                             "ur", "hy", "ka", "hi", "th",
+                                             "ur", "hy", "ka", "hi", "th", "ko",
                                              "fr", "de", "es", "it", "tr", "cs", "sv", "hu", "da", "fi"].map { Language(rawValue: $0) }
 
     /// Written without spaces between words (Thai, Lao, Khmer, Burmese): scored by
@@ -61,20 +61,26 @@ public struct LayoutMap: Sendable {
     private let forward: [KeyStroke: String]
     /// Dead keys: what each following key produces after them (Greek ΄ then α → ά).
     public let deadKeys: [KeyStroke: [KeyStroke: String]]
+    /// Keys type Hangul letters that join into syllables (Korean 2-Set): see `Hangul`.
+    public let joinsHangul: Bool
 
     public init(language: Language, inputSourceID: String, forward: [KeyStroke: String],
-                deadKeys: [KeyStroke: [KeyStroke: String]] = [:]) {
+                deadKeys: [KeyStroke: [KeyStroke: String]] = [:], joinsHangul: Bool = false) {
         self.language = language
         self.inputSourceID = inputSourceID
         self.forward = forward
         self.deadKeys = deadKeys
+        self.joinsHangul = joinsHangul
     }
+
+    /// What each key types on its own.
+    public var keyMap: [KeyStroke: String] { forward }
 
     public func produces(_ stroke: KeyStroke) -> Bool { forward[stroke] != nil }
 
     /// The same key map under another name, for a layout variant.
     public func named(_ language: Language) -> LayoutMap {
-        LayoutMap(language: language, inputSourceID: inputSourceID, forward: forward, deadKeys: deadKeys)
+        LayoutMap(language: language, inputSourceID: inputSourceID, forward: forward, deadKeys: deadKeys, joinsHangul: joinsHangul)
     }
 
     /// Whether some key types a different letter here than on `other`: Dvorak against
@@ -99,8 +105,24 @@ public struct LayoutMap: Sendable {
         return out
     }
 
+    /// The keys that type `text` here, or nil when some character can't be typed.
+    public func strokes(typing text: String, inverse: [String: [KeyStroke]]? = nil) -> [KeyStroke]? {
+        let inverse = inverse ?? self.inverse()
+        var out: [KeyStroke] = []
+        for scalar in (joinsHangul ? Hangul.keyLetters(text) : text).unicodeScalars {
+            guard let keys = inverse[String(scalar)] else { return nil }
+            out += keys
+        }
+        return out
+    }
+
     /// Re-types the strokes on this layout; nil when a stroke has no output here.
     public func render(_ strokes: [KeyStroke]) -> String? {
+        guard joinsHangul else { return renderKeys(strokes) }
+        return renderKeys(strokes).map(Hangul.compose)
+    }
+
+    private func renderKeys(_ strokes: [KeyStroke]) -> String? {
         var out = ""
         var i = 0
         while i < strokes.count {
