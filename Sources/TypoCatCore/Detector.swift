@@ -62,12 +62,19 @@ public final class Detector: @unchecked Sendable {
     /// fixed 98% but changed 0.23%, plus 0.11% of words with a typo.
     public var midWordMinimumStrokes = 7
 
+    /// Words the user converted by hand with ⌃⌥Space, when they chose to keep them: they count
+    /// as words this common in their language. Keyed by base language, lowercased.
+    public var learnedWords: [Language: Set<String>] = [:]
+    public var learnedScore = 0.85
+
     public init(dictionaries: [Language: FrequencyDictionary]) {
         self.dictionaries = dictionaries
     }
 
     /// 0...1 confidence that `text` is real text in `language`.
     public func score(_ text: String, as language: Language) -> Double {
+        if let learned = learnedWords[language.base], !learned.isEmpty,
+           learned.contains(Self.learnable(text)) { return learnedScore }
         guard let dict = dictionary(for: language) else { return 0 }
         if language.writesWithoutSpaces {
             if language.base == .thai && !ThaiOrthography.isPlausible(text) { return 0 }
@@ -178,6 +185,9 @@ public final class Detector: @unchecked Sendable {
         return scalars[..<first].contains { !usualLeading.contains($0) }
             || scalars[(last + 1)...].contains { !usualTrailing.contains($0) }
     }
+
+    /// The form a learned word is kept in: lowercase, without edge punctuation.
+    public static func learnable(_ text: String) -> String { text.trimmingCharacters(in: edgePunctuation).lowercased() }
 
     /// Scalars left once edge punctuation is trimmed.
     static func coreLength(_ text: String) -> Int { text.trimmingCharacters(in: edgePunctuation).unicodeScalars.count }

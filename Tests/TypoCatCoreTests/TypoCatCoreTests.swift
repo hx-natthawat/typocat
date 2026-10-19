@@ -210,6 +210,22 @@ final class TypoCatCoreTests: XCTestCase {
         XCTAssertEqual(fix?.to, .english)
     }
 
+    func testLearnedWordsCount() {
+        let d = detector()
+        let keys = strokes([3, 4, 5]) // o w r on "en", щ ц к on "ru"
+        XCTAssertNil(d.decide(strokes: keys, typed: "owr", current: .english, layouts: layouts()))
+        d.learnedWords = [Self.ru: [Detector.learnable("ЩЦК,")]]
+        XCTAssertEqual(d.decide(strokes: keys, typed: "owr", current: .english, layouts: layouts())?.replacement, "щцк")
+    }
+
+    func testWebsiteHost() {
+        XCTAssertEqual(WebsiteHost.from("https://www.GitHub.com/hx-natthawat/typocat"), "github.com")
+        XCTAssertEqual(WebsiteHost.from("news.bbc.co.uk/thai"), "news.bbc.co.uk")
+        XCTAssertNil(WebsiteHost.from("how to type thai"))
+        XCTAssertNil(WebsiteHost.from("file:///Users/me/a.html"))
+        XCTAssertNil(WebsiteHost.from(""))
+    }
+
     func testTypoFixPicksClearWinner() {
         let d = detector()
         XCTAssertNil(d.typoFix("helo", in: .english))                 // hello 5000 vs hell 900: not 10x apart

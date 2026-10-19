@@ -60,3 +60,17 @@ public enum ProtectedWords {
         return (category == .terminal || category == .code) && commands.contains(w)
     }
 }
+
+/// The host name a website's language counts are kept under: what an address bar shows.
+public enum WebsiteHost {
+    /// "https://www.github.com/x" or "github.com/x" → "github.com". nil for pages without a
+    /// host (a new tab, a file, a search typed into the address bar).
+    public static func from(_ text: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty, !trimmed.contains(" ") else { return nil }
+        let withScheme = trimmed.contains("://") ? trimmed : "https://\(trimmed)"
+        guard let url = URL(string: withScheme), let host = url.host?.lowercased(), host.contains("."),
+              ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return nil }
+        return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+    }
+}

@@ -14,11 +14,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var excludeItem = NSMenuItem(title: "", action: #selector(toggleExcludeFrontApp), keyEquivalent: "")
     private var matchLayoutItem = NSMenuItem(title: "Match layout to each app", action: #selector(toggleMatchLayout),
                                              keyEquivalent: "")
+    private var matchSiteItem = NSMenuItem(title: "Match layout to each website", action: #selector(toggleMatchSite),
+                                           keyEquivalent: "")
     private var typoItem = NSMenuItem(title: "Fix typos (beta)", action: #selector(toggleFixTypos), keyEquivalent: "")
     private var loginItem = NSMenuItem(title: "Open at login", action: #selector(toggleOpenAtLogin), keyEquivalent: "")
+    private var learnItem = NSMenuItem(title: "Learn words I convert with ⌃⌥Space", action: #selector(toggleLearnWords),
+                                       keyEquivalent: "")
+    private var forgetItem = NSMenuItem(title: "", action: #selector(forgetLearnedWords), keyEquivalent: "")
     /// The last app that wasn't us; opening our menu doesn't change it.
     private var frontApp: NSRunningApplication?
     private var permissionTimer: Timer?
+    private var siteTimer: Timer?
+    private let siteQueue = DispatchQueue(label: "TypoCat.site")
+    private var siteLookupRunning = false
+    private var currentHost: String?
     /// Languages of the enabled layouts the current detector was built for.
     private var loadedLanguages: Set<Language> = []
     private let setup = SetupModel()
@@ -32,6 +41,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         interceptor.onCorrection = { [weak self] c in
             self?.lastCorrectionItem.title = "Last: \(c.original) → \(c.replacement)"
             self?.setup.lastFix = "\(c.original) → \(c.replacement)"
+        }
+        interceptor.onManualConversion = { [weak self] c in
+            guard let self, self.store.learn(c.replacement, in: c.to) else { return }
+            self.interceptor.detector.learnedWords = self.store.learnedWords
+            self.refreshLearnItems()
         }
         buildMenu()
         configureSetup()
@@ -48,6 +62,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setup.openAtLogin = SMAppService.mainApp.status == .enabled
         setup.fixTypos = store.fixTypos
         setup.matchLayout = store.matchLayoutPerApp
+        setup.learnWords = store.learnWords
+        setup.matchSite = store.matchLayoutPerSite
+        setup.setMatchSite = { [weak self] on in
+            if self?.store.matchLayoutPerSite != on { self?.toggleMatchSite() }
+        }
+        setup.setLearnWords = { [weak self] on in
+            if self?.store.learnWords != on { self?.toggleLearnWords() }
+        }
         setup.setOpenAtLogin = { [weak self] on in
             if (SMAppService.mainApp.status == .enabled) != on { self?.toggleOpenAtLogin() }
         }
@@ -124,14 +146,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         excludeItem.target = self
         matchLayoutItem.target = self
         matchLayoutItem.state = store.matchLayoutPerApp ? .on : .off
+        matchSiteItem.target = self
+        matchSiteItem.state = store.matchLayoutPerSite ? .on : .off
         loginItem.target = self
         typoItem.target = self
         typoItem.state = store.fixTypos ? .on : .off
+        learnItem.target = self
+        forgetItem.target = self
+        refreshLearnItems()
         loginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
         menu.addItem(enabledItem)
         menu.addItem(excludeItem)
         menu.addItem(matchLayoutItem)
+        menu.addItem(matchSiteItem)
         menu.addItem(typoItem)
+        menu.addItem(learnItem)
+        menu.addItem(forgetItem)
         menu.addItem(loginItem)
         menu.addItem(permissionItem)
         menu.addItem(.separator())
@@ -177,6 +207,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ElectronAccessibility.enableIfElectron(app)
         matchLayout(to: app)
         refreshTitle()
+        watchSite()
     }
 
     /// Switches to the language the user usually types in `app`.
@@ -185,6 +216,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
               let language = store.appLanguages.dominant(in: id), language != inputSources.currentLanguage() else { return }
         inputSources.select(language)
         NSLog("TypoCat: \(app.localizedName ?? id) matched layout to its dominant language (\(language.rawValue))")
+    }
+
+    // MARK: - Websites
+
+    /// While a browser is in front and per-site matching is on, checks the site once a second.
+    private func watchSite() {
+        siteTimer?.invalidate()
+        siteTimer = nil
+        currentHost = nil
+        interceptor.siteKey = nil
+        guard store.matchLayoutPerSite, let app = frontApp, BrowserSite.isBrowser(app.bundleIdentifier) else { return }
+        checkSite(app)
+        siteTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.checkSite(app) }
+    }
+
+    /// Reads the host off the main thread: Accessibility calls can take up to their timeout.
+    private func checkSite(_ app: NSRunningApplication) {
+        guard !siteLookupRunning else { return }
+        siteLookupRunning = true
+        siteQueue.async {
+            let host = BrowserSite.currentHost(of: app)
+            DispatchQueue.main.async {
+                self.siteLookupRunning = false
+                guard self.frontApp == app, self.store.matchLayoutPerSite, host != self.currentHost else { return }
+                self.currentHost = host
+                self.interceptor.siteKey = host.map(BrowserSite.profileKey)
+                self.matchLayout(toSite: host)
+            }
+        }
+    }
+
+    /// Switches to the language the user usually types on this site.
+    private func matchLayout(toSite host: String?) {
+        guard let host, interceptor.enabled, !store.isExcluded(frontApp?.bundleIdentifier),
+              let language = store.appLanguages.dominant(in: BrowserSite.profileKey(host)),
+              inputSources.layouts[language] != nil, language != inputSources.currentLanguage() else { return }
+        interceptor.reset()
+        inputSources.select(language)
+        NSLog("TypoCat: matched layout to this website's dominant language (\(language.rawValue))")
+    }
+
+    @objc private func toggleMatchSite() {
+        store.matchLayoutPerSite.toggle()
+        matchSiteItem.state = store.matchLayoutPerSite ? .on : .off
+        setup.matchSite = store.matchLayoutPerSite
+        watchSite()
     }
 
     @objc private func toggleMatchLayout() {
@@ -207,6 +284,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ])
         NSApp.activate(ignoringOtherApps: true)
         NSApp.orderFrontStandardAboutPanel(options: [.credits: credits, .applicationName: "TypoCat"])
+    }
+
+    @objc private func toggleLearnWords() {
+        store.learnWords.toggle()
+        interceptor.detector.learnedWords = store.learnedWords
+        setup.learnWords = store.learnWords
+        setup.matchSite = store.matchLayoutPerSite
+        setup.setMatchSite = { [weak self] on in
+            if self?.store.matchLayoutPerSite != on { self?.toggleMatchSite() }
+        }
+        refreshLearnItems()
+    }
+
+    @objc private func forgetLearnedWords() {
+        store.forgetLearnedWords()
+        interceptor.detector.learnedWords = [:]
+        refreshLearnItems()
+    }
+
+    private func refreshLearnItems() {
+        learnItem.state = store.learnWords ? .on : .off
+        let n = store.learnedWordCount
+        forgetItem.title = n == 1 ? "Forget 1 learned word" : "Forget \(n) learned words"
+        forgetItem.isHidden = !store.learnWords || n == 0
     }
 
     @objc private func toggleFixTypos() {
@@ -249,7 +350,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         loadedLanguages = languages
         DispatchQueue.global(qos: .userInitiated).async {
             let detector = Dictionaries.makeDetector(for: languages)
-            DispatchQueue.main.async { self.interceptor.detector = detector; self.interceptor.reset() }
+            DispatchQueue.main.async {
+                detector.learnedWords = self.store.learnedWords
+                self.interceptor.detector = detector
+                self.interceptor.reset()
+            }
         }
     }
 

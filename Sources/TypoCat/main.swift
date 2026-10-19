@@ -36,6 +36,17 @@ if let i = CommandLine.arguments.firstIndex(of: "--bench") {
                  Double(stats.size_in_use) / 1_048_576, Double(vm.phys_footprint) / 1_048_576))
     exit(0)
 }
+// Checks the site reading without printing what's open: `--site-probe com.apple.Safari example.com`
+if let i = CommandLine.arguments.firstIndex(of: "--site-probe") {
+    let args = Array(CommandLine.arguments.dropFirst(i + 1))
+    guard args.count == 2, let app = NSRunningApplication.runningApplications(withBundleIdentifier: args[0]).first else {
+        print("usage: --site-probe <running browser bundle id> <expected host>"); exit(2)
+    }
+    guard AXIsProcessTrusted() else { print("this process has no Accessibility access"); exit(1) }
+    let host = BrowserSite.currentHost(of: app)
+    print(host == nil ? "unreadable" : host == args[1] ? "match" : "other site")
+    exit(0)
+}
 if let i = CommandLine.arguments.firstIndex(of: "--eval-typos") {
     SelfTest.evaluateTypos(top: CommandLine.arguments.dropFirst(i + 1).first.flatMap { Int($0) } ?? 5000)
     exit(0)

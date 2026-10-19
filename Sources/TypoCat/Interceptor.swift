@@ -12,10 +12,15 @@ final class Interceptor {
 
     var enabled = true
     var onCorrection: ((Correction) -> Void)?
+    /// A word converted by hand with ⌃⌥Space, for learning.
+    var onManualConversion: ((Correction) -> Void)?
     /// Set from the app delegate when the front app changes.
     var frontBundleID: String? {
         didSet { category = AppCategory(bundleID: frontBundleID); reset() }
     }
+
+    /// The website in front, as `BrowserSite.profileKey`, when per-site matching is on.
+    var siteKey: String?
 
     /// Replaced when the enabled layouts change.
     var detector: Detector
@@ -161,7 +166,7 @@ final class Interceptor {
                 }
                 // Count only words that read as real text, not passwords or noise.
                 if strokes.count >= detector.minimumStrokes, detector.score(typed, as: current) > detector.rejectThreshold {
-                    store.recordLanguage(current, in: frontBundleID)
+                    record(current)
                 }
                 return pass
             }
@@ -213,6 +218,7 @@ final class Interceptor {
             self.replace(scalarCount: correction.original.unicodeScalars.count, with: correction.replacement)
             self.inputSources.select(correction.to)
             self.onCorrection?(correction)
+            self.onManualConversion?(correction)
         }
     }
 
@@ -255,7 +261,7 @@ final class Interceptor {
             lastCorrection = nil
             return
         }
-        store.recordLanguage(correction.to, in: frontBundleID)
+        record(correction.to)
         replace(scalarCount: correction.original.unicodeScalars.count, with: correction.replacement,
                 fenceAtEnd: delimiter == nil)
         select(correction.to)
@@ -267,7 +273,9 @@ final class Interceptor {
     private func undo(_ correction: Correction, delimiter: CGEvent?, word: String) {
         lastCorrection = nil
         store.ignore(word)
+        if store.unlearn(correction.replacement, in: correction.to) { detector.learnedWords = store.learnedWords }
         store.correctLanguage(from: correction.to, to: correction.from, in: frontBundleID)
+        if let siteKey { store.correctLanguage(from: correction.to, to: correction.from, in: siteKey) }
         DispatchQueue.main.async {
             // The field should end with our replacement plus the replayed delimiter, if any.
             let trailing = delimiter == nil ? 0 : 1
@@ -282,6 +290,12 @@ final class Interceptor {
             self.select(correction.from)
             if let delimiter { self.post(delimiter, last: true) }
         }
+    }
+
+    /// Counts a word's language for the front app and, when known, the website.
+    private func record(_ language: Language) {
+        store.recordLanguage(language, in: frontBundleID)
+        if let siteKey { store.recordLanguage(language, in: siteKey) }
     }
 
     private func select(_ language: Language) {

@@ -19,10 +19,14 @@ final class SetupModel: ObservableObject {
     @Published var openAtLogin = false
     @Published var fixTypos = false
     @Published var matchLayout = true
+    @Published var learnWords = false
+    @Published var matchSite = false
 
     var setOpenAtLogin: (Bool) -> Void = { _ in }
     var setFixTypos: (Bool) -> Void = { _ in }
     var setMatchLayout: (Bool) -> Void = { _ in }
+    var setLearnWords: (Bool) -> Void = { _ in }
+    var setMatchSite: (Bool) -> Void = { _ in }
     var done: () -> Void = {}
 }
 
@@ -191,7 +195,9 @@ private struct SetupView: View {
     @ViewBuilder private var options: some View {
         Toggle("Open at login", isOn: binding(\.openAtLogin, model.setOpenAtLogin))
         Toggle("Match the keyboard to each app", isOn: binding(\.matchLayout, model.setMatchLayout))
+        Toggle("Match the keyboard to each website (keeps site names on this Mac)", isOn: binding(\.matchSite, model.setMatchSite))
         Toggle("Fix typos too (beta): recieve → receive", isOn: binding(\.fixTypos, model.setFixTypos))
+        Toggle("Learn words I convert with ⌃⌥Space (saved on this Mac only)", isOn: binding(\.learnWords, model.setLearnWords))
     }
 
     private func binding(_ key: ReferenceWritableKeyPath<SetupModel, Bool>, _ set: @escaping (Bool) -> Void) -> Binding<Bool> {

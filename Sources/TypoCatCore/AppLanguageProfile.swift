@@ -23,6 +23,11 @@ public struct AppLanguageProfile: Codable, Sendable, Equatable {
         record(right, in: bundleID)
     }
 
+    /// Drops the counts for some keys (every website, when per-site matching is turned off).
+    public mutating func removeAll(where shouldRemove: (String) -> Bool) {
+        counts = counts.filter { !shouldRemove($0.key) }
+    }
+
     public func dominant(in bundleID: String) -> Language? {
         guard let langs = counts[bundleID] else { return nil }
         let total = langs.values.reduce(0, +)
