@@ -91,6 +91,8 @@ private struct SetupView: View {
             .padding(.horizontal, 24)
             footer.padding(.top, 16)
         }
+        // Hebrew and Arabic read right to left: badges, checkboxes and the button move to the other side.
+        .environment(\.layoutDirection, appLayoutDirection)
         // As tall as the content: translations run longer than English.
         .frame(width: 540)
         .fixedSize(horizontal: false, vertical: true)
@@ -181,7 +183,7 @@ private struct SetupView: View {
                 Text("\u{00A0}" + example.typed).font(.system(size: 13, design: .monospaced))
                     .padding(.horizontal, 8).padding(.vertical, 3)
                     .background(RoundedRectangle(cornerRadius: 6).fill(Brand.coral.opacity(0.14)))
-                Image(systemName: "arrow.right").foregroundColor(Brand.marigold)
+                Image(systemName: "arrow.forward").foregroundColor(Brand.marigold)
                 Text(example.word).font(.system(size: 13, weight: .semibold, design: .monospaced))
                     .padding(.horizontal, 8).padding(.vertical, 3)
                     .background(RoundedRectangle(cornerRadius: 6).fill(Brand.lagoon.opacity(0.14)))
@@ -226,6 +228,13 @@ private struct SetupView: View {
         }
         .padding(.horizontal, 24).padding(.bottom, 20)
     }
+}
+
+/// The direction of the language the app's text is shown in, which SwiftUI in a plain
+/// NSHostingView doesn't pick up by itself.
+private var appLayoutDirection: LayoutDirection {
+    let language = Bundle.main.preferredLocalizations.first ?? "en"
+    return Locale.Language(identifier: language).characterDirection == .rightToLeft ? .rightToLeft : .leftToRight
 }
 
 private struct Pill: ButtonStyle {
