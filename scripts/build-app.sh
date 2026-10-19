@@ -20,7 +20,7 @@ for f in Data/*_50k.txt; do
   .build/release/TypoCat --compile-dict "${name%_50k}" "$f" "$APP/Contents/Resources/$name.tcdict"
 done
 # VERSION comes from the release tag in CI (v0.2.0 → 0.2.0).
-VERSION="${VERSION:-0.1.0}"
+VERSION="${VERSION:-0.2.0}"
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
