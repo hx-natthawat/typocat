@@ -72,15 +72,23 @@ System Settings → Privacy & Security → Accessibility and add it again.
 
 ## Install on another Mac
 
+Download `TypoCat.dmg` from the [latest release](https://github.com/hx-natthawat/typocat/releases/latest),
+or build it yourself:
+
 ```bash
 ./scripts/build-app.sh && ./scripts/make-dmg.sh   # builds build/TypoCat.dmg
 ```
 
-Copy `TypoCat.dmg` to the other Mac (AirDrop, USB, a chat app), open it and drag
+Copy `TypoCat.dmg` to the other Mac (AirDrop, USB, a chat app) if you built it, open it and drag
 TypoCat into Applications. The build isn't notarized, so the first time you open it
 macOS says it can't check it for malware: open System Settings → Privacy & Security
 and click Open Anyway. The setup window then walks through Accessibility access,
 your keyboards and a test field. Open it again any time from the menu: Setup….
+
+Check for Updates… in the menu tells you when a newer release is out. Release
+builds are ad-hoc signed, so after installing an update turn TypoCat off and on
+again in Accessibility settings. To publish a release, push a tag such as `v0.2.0`:
+the Release workflow builds the disk image and attaches it.
 
 ## Using it
 
@@ -162,7 +170,7 @@ fields, TypoCat falls back to its keystroke buffer.
 
 Everything runs on your Mac. TypoCat keeps only the current word in memory.
 It does not log or send keystrokes, and it pauses in secure input fields such as
-password boxes.
+password boxes. The only network request is Check for Updates…, when you pick it.
 
 ## Roadmap
 

@@ -65,6 +65,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func showSetup() { setupWindow.show() }
 
+    @objc private func checkForUpdates() { UpdateCheck.run() }
+
     /// The enabled layouts, and "hello" as it comes out on one that isn't English.
     private func refreshSetupLayouts() {
         let layouts = inputSources.layouts
@@ -141,6 +143,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let setupItem = NSMenuItem(title: "Setup…", action: #selector(showSetup), keyEquivalent: "")
         setupItem.target = self
         menu.addItem(setupItem)
+        let updates = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
+        updates.target = self
+        menu.addItem(updates)
         let about = NSMenuItem(title: "About TypoCat", action: #selector(showAbout), keyEquivalent: "")
         about.target = self
         menu.addItem(about)

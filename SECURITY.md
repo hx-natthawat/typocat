@@ -14,7 +14,9 @@ typed on the wrong layout. That is a lot of trust, so here is exactly what it do
 - Pauses in secure input fields such as passwords, and in apps you exclude.
 
 **What it never does**
-- No network connections. Word lists ship inside the app.
+- No network connections, except when you pick Check for Updates…: that one request asks
+  api.github.com for the latest release tag and sends nothing about you or your typing.
+  Word lists ship inside the app.
 - No logging of typed text, no analytics, no crash reporting.
 
 ## Reporting a vulnerability

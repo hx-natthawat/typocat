@@ -22,7 +22,7 @@ hdiutil detach "/Volumes/$VOLUME" -quiet 2>/dev/null || true
 hdiutil create -quiet -volname "$VOLUME" -srcfolder "$work/root" -fs HFS+ -format UDRW -ov "$work/rw.dmg"
 hdiutil attach -quiet -noautoopen "$work/rw.dmg"
 
-osascript <<APPLESCRIPT || echo "Finder layout skipped (allow Automation for Finder to get the background)" >&2
+cat > "$work/layout.applescript" <<APPLESCRIPT
 tell application "Finder"
   tell disk "$VOLUME"
     open
@@ -43,6 +43,12 @@ tell application "Finder"
   end tell
 end tell
 APPLESCRIPT
+# Finder can hang without a GUI session (some CI runners), so give it a minute at most.
+osascript "$work/layout.applescript" &
+pid=$!
+for _ in $(seq 60); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
+if kill -0 "$pid" 2>/dev/null; then kill "$pid"; echo "Finder layout timed out; the disk image has no background" >&2
+elif ! wait "$pid"; then echo "Finder layout skipped (allow Automation for Finder to get the background)" >&2; fi
 
 sync
 hdiutil detach "/Volumes/$VOLUME" -quiet
