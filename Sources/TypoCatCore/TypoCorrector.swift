@@ -9,7 +9,7 @@ extension Detector {
     public func typoFix(_ typed: String, in language: Language, ignoring ignored: Set<String> = [],
                         category: AppCategory = .general) -> String? {
         guard !language.writesWithoutSpaces, category != .terminal, category != .code,
-              !ignored.contains(typed), !ProtectedWords.contains(typed, in: category),
+              !Self.isIgnored(typed, in: ignored), !ProtectedWords.contains(typed, in: category),
               let dict = dictionary(for: language) else { return nil }
         // Keep edge punctuation ("becuase," → "because,") and fix only the word inside.
         let scalars = typed.unicodeScalars

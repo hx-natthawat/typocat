@@ -251,6 +251,25 @@ final class TypoCatCoreTests: XCTestCase {
         XCTAssertEqual(ko.render(strokes([15]).map { KeyStroke(keyCode: $0.keyCode, shift: true) }), "ㄲ")
     }
 
+    func testConvertsSelectedText() {
+        // Keys 0...5: h e l o w r / р у д щ ц к. "рук" is typed with the "her" keys.
+        let d = Detector(dictionaries: [
+            .english: FrequencyDictionary(contents: "hello 5000\nrow 300\n"),
+            Self.ru: FrequencyDictionary(contents: "рук 500\nрукд 100\n"),
+        ])
+        // Line breaks and spaces stay.
+        let fix = d.convertText("her herl\nher", current: .english, layouts: layouts())
+        XCTAssertEqual(fix?.replacement, "рук рукд\nрук")
+        XCTAssertEqual(fix?.from, .english)
+        XCTAssertEqual(fix?.to, Self.ru)
+        // And back: English typed on "ru" keys.
+        XCTAssertEqual(d.convertText("руддщ кщц", current: Self.ru, layouts: layouts())?.replacement, "hello row")
+        // Text that already reads well stays.
+        XCTAssertNil(d.convertText("hello row", current: .english, layouts: layouts()))
+        // Words the other layout can't type are kept.
+        XCTAssertEqual(d.convertText("her 42", current: .english, layouts: layouts())?.replacement, "рук 42")
+    }
+
     func testLearnedWordsCount() {
         let d = detector()
         let keys = strokes([3, 4, 5]) // o w r on "en", щ ц к on "ru"

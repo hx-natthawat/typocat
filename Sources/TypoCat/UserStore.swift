@@ -2,7 +2,7 @@ import Foundation
 import TypoCatCore
 
 /// Settings and learned state that survive restarts.
-/// Settings live in UserDefaults; learned state lives in ~/Library/Application Support/TypoCat/
+/// Settings and fix counts live in UserDefaults; learned state lives in ~/Library/Application Support/TypoCat/
 /// (ignoredWords.json, appLanguageCounts.json, and learnedWords.json when learning is on).
 final class UserStore {
     private let defaults = UserDefaults.standard
@@ -42,6 +42,24 @@ final class UserStore {
             defaults.set(newValue, forKey: "matchLayoutPerSite")
             if !newValue { appLanguages.removeAll { $0.hasPrefix("site:") }; saveAppLanguagesSoon() }
         }
+    }
+
+    /// What converts the current word or the selection by hand.
+    enum Shortcut: String, CaseIterable {
+        case controlOptionSpace, shiftTwice, both
+        var usesControlOptionSpace: Bool { self != .shiftTwice }
+        var usesShiftTwice: Bool { self != .controlOptionSpace }
+    }
+
+    var shortcut: Shortcut {
+        get { defaults.string(forKey: "shortcut").flatMap(Shortcut.init) ?? .controlOptionSpace }
+        set { defaults.set(newValue.rawValue, forKey: "shortcut") }
+    }
+
+    /// Flash the menu bar icon on each fix.
+    var showFixes: Bool {
+        get { defaults.object(forKey: "showFixes") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "showFixes") }
     }
 
     var matchLayoutPerApp: Bool {
@@ -137,12 +155,43 @@ final class UserStore {
         }
     }
 
+    /// Words left alone: undone fixes, plus any added by hand in the Exceptions window.
     func ignore(_ word: String) {
         guard ignoredWords.insert(word).inserted else { return }
+        saveIgnoredWords()
+    }
+
+    func unignore(_ word: String) {
+        guard ignoredWords.remove(word) != nil else { return }
+        saveIgnoredWords()
+    }
+
+    private func saveIgnoredWords() {
         let snapshot = ignoredWords.sorted()
         let url = fileURL
         DispatchQueue.global(qos: .utility).async {
             try? JSONEncoder().encode(snapshot).write(to: url, options: .atomic)
         }
     }
+
+    // MARK: - Fix counts
+
+    /// How many words were fixed into each language: numbers only, never the words.
+    private(set) var fixCounts: [Language: Int] {
+        get {
+            let raw = defaults.dictionary(forKey: "fixCounts") as? [String: Int] ?? [:]
+            return Dictionary(uniqueKeysWithValues: raw.map { (Language(rawValue: $0.key), $0.value) })
+        }
+        set { defaults.set(Dictionary(uniqueKeysWithValues: newValue.map { ($0.key.rawValue, $0.value) }), forKey: "fixCounts") }
+    }
+
+    /// Counts by base language: Dvorak fixes count as English.
+    func countFix(into language: Language, by delta: Int = 1) {
+        var counts = fixCounts
+        counts[language.base] = max(0, counts[language.base, default: 0] + delta)
+        if counts[language.base] == 0 { counts[language.base] = nil }
+        fixCounts = counts
+    }
+
+    func resetFixCounts() { defaults.removeObject(forKey: "fixCounts") }
 }

@@ -8,7 +8,7 @@
 
 A macOS menu-bar app that fixes words typed on the wrong keyboard layout
 (`ghbdtn` → `привет`, `akuo` → `שלום`, `l;ylfu` → `สวัสดี`, `руддщ` → `hello`,
-`;qison` → `maison`, `jdpps` → `hello` on Dvorak) and switches the layout for
+`;qison` → `maison`, `dkssud` → `안녕`, `jdpps` → `hello` on Dvorak) and switches the layout for
 you. It works with any layout macOS has; detection needs a word list for the
 layout's language. The menus and setup window are in English, Thai, Russian,
 Ukrainian, German, French, Spanish, Hebrew, Arabic, Greek and Turkish.
@@ -40,31 +40,32 @@ that get changed by mistake.
 
 | Language | Layout | Fixed (typed on EN) | EN fixed (typed on it) | Changed |
 |---|---|---|---|---|
-| Russian | Russian | 99.0% | 99.3% | 0.00% |
-| Ukrainian | Ukrainian | 98.4% | 99.3% | 0.00% |
-| Bulgarian | Bulgarian | 98.4% | 99.0% | 0.01% |
+| Russian | Russian | 99.2% | 99.3% | 0.00% |
+| Ukrainian | Ukrainian | 98.8% | 99.3% | 0.01% |
+| Bulgarian | Bulgarian | 98.9% | 99.0% | 0.01% |
 | Serbian | Serbian | 90.2% | 82.1% | 0.03% |
 | Macedonian | Macedonian | 91.0% | 88.8% | 0.06% |
 | Kazakh | Kazakh | 99.6% | 99.8% | 0.00% |
-| Greek | Greek | 97.1% | 96.3% | 0.02% |
-| Hebrew | Hebrew | 94.3% | 97.7% | 0.00% |
-| Arabic | Arabic | 97.3% | 98.7% | 0.00% |
-| Persian | Persian | 96.6% | 98.7% | 0.00% |
-| Urdu | Urdu | 88.3% | 97.5% | 0.11% |
+| Greek | Greek | 97.1% | 96.4% | 0.02% |
+| Hebrew | Hebrew | 95.6% | 97.7% | 0.00% |
+| Arabic | Arabic | 97.8% | 98.7% | 0.00% |
+| Persian | Persian | 97.0% | 98.7% | 0.01% |
+| Urdu | Urdu | 88.3% | 97.5% | 0.10% |
 | Armenian | Armenian HM QWERTY | 91.1% | 98.4% | 0.06% |
 | Georgian | Georgian QWERTY | 93.4% | 98.1% | 0.01% |
-| Hindi | Devanagari | 95.0% | 99.0% | 0.03% |
+| Hindi | Devanagari | 95.4% | 99.0% | 0.03% |
 | Thai | Thai | 98.3% | 99.0% | 0.01% |
-| French | French (AZERTY) | 99.1% | 97.9% | 0.03% |
+| Korean | 2-Set Korean | 98.5% | 99.8% | 0.06% |
+| French | French (AZERTY) | 99.3% | 98.7% | 0.03% |
 | German | German (QWERTZ) | 99.1% | 98.4% | 0.00% |
 | Spanish | Spanish | 100.0% | 100.0% | 0.00% |
-| Italian | Italian | 98.0% | 93.6% | 0.08% |
-| Turkish | Turkish (F) | 98.3% | 98.9% | 0.02% |
-| Czech | Czech (QWERTZ) | 99.2% | 98.4% | 0.15% |
-| Swedish | Swedish | 99.7% | 97.2% | 0.00% |
-| Hungarian | Hungarian (QWERTZ) | 99.3% | 98.1% | 0.03% |
-| Danish | Danish | 99.1% | 91.7% | 0.00% |
-| Finnish | Finnish | 99.2% | 100.0% | 0.00% |
+| Italian | Italian | 98.8% | 96.7% | 0.08% |
+| Turkish | Turkish (F) | 98.5% | 98.9% | 0.02% |
+| Czech | Czech (QWERTZ) | 99.4% | 98.4% | 0.15% |
+| Swedish | Swedish | 99.9% | 97.2% | 0.00% |
+| Hungarian | Hungarian (QWERTZ) | 99.6% | 98.1% | 0.03% |
+| Danish | Danish | 99.7% | 91.7% | 0.00% |
+| Finnish | Finnish | 99.8% | 100.0% | 0.00% |
 | English | Dvorak (next to QWERTY) | 96.6% | 96.0% | 0.00% |
 | English | Colemak (next to QWERTY) | 96.9% | 96.9% | 0.02% |
 
@@ -81,6 +82,12 @@ moved keys count (French has 3394 of the top 5000; Spanish, with only `ñ`, has
 (`blur0.7`), not words anyone types. A second layout for the same language
 (Dvorak or Colemak next to ABC) gets its own entry, shown as `DV` or `CO`, and
 shares the language's word list.
+
+Korean is typed through an input method rather than a layout, so macOS has no
+key map for it to read. TypoCat has the 2-Set (Dubeolsik) layout built in and
+joins letters into syllables the way the input method does (`ㅇㅏㄴ` → `안`).
+3-Set and Romaja aren't supported. Measured without typing into an app; please
+report what you see with the real input method.
 
 Short words left alone are reread once a later word is fixed into the same
 language (`lf ghbdtn` → `да привет`). In Thai, Russian and Kazakh a short word
@@ -139,13 +146,15 @@ the Release workflow builds the disk image and attaches it.
 
 - **Fixing a word:** type it on the wrong layout and press Space, Return or Tab. The word is retyped on the right layout, and the keyboard switches to that layout.
 - **Undo:** press Backspace or ⌘Z right after a fix. TypoCat won't fix that word again.
-- **Convert now:** press ⌃⌥Space to convert the current word whatever the detector thinks.
+- **Convert now:** press ⌃⌥Space to convert the current word whatever the detector thinks. With nothing typed yet, it converts the selected text instead: a whole sentence or paragraph typed on the wrong layout. The shortcut can be Shift pressed twice instead, or both (menu: Convert shortcut).
+- **Exceptions…:** the words TypoCat never changes and the apps it's off in. Undoing a fix adds its word; names, brands and slang can be added by hand.
+- **Show each fix:** the menu bar icon flashes on each fix. With VoiceOver on, the fix is also read aloud. The menu shows how many words were fixed into each language (numbers only).
 - **Menu options:**
   - **Disable in \<App\>:** turns TypoCat off for the front app.
   - **Match layout to each app:** switching to an app selects the language you usually type there. This starts after 20 words and needs a 75% majority.
   - **Match layout to each website:** off by default. The same, per website, in Safari, Chrome, Arc, Edge, Brave and other browsers. TypoCat reads the page's host name through Accessibility once a second while a browser is in front.
   - **Fix typos (beta):** off by default. See below.
-  - **Learn words I convert with ⌃⌥Space:** off by default. A word you convert by hand counts as a word in its language from then on, so it gets fixed by itself next time. Undoing a fix forgets the word; turning the option off deletes them all.
+  - **Learn words I convert by hand:** off by default. A word you convert by hand counts as a word in its language from then on, so it gets fixed by itself next time. Undoing a fix forgets the word; turning the option off deletes them all.
   - **Open at login.**
 - **Never converted:** tech names (`git`, `api`, `json`…). In terminals and code editors, shell commands are not converted either.
 - **Field check:** before rewriting, TypoCat reads the focused field through the Accessibility API and checks that it ends with the typed word. If it doesn't (autocomplete, a moved cursor), the fix is skipped. Apps that don't expose their text fall back to the keystroke buffer.
@@ -221,13 +230,14 @@ Everything runs on your Mac. TypoCat keeps only the current word in memory.
 It does not log or send keystrokes, and it pauses in secure input fields such as
 password boxes. The only network request is Check for Updates…, when you pick it.
 The two options that keep more (words you convert by hand, website host names)
-are off until you turn them on, and stay on this Mac.
+are off until you turn them on, and stay on this Mac. Converting a selection reads it
+through Accessibility; in apps that don't expose it (most browsers) TypoCat copies it
+with ⌘C and puts your clipboard back right after.
 
 ## Roadmap
 
 - Settle more ambiguous short words in phonetic layouts (Serbian `то`/`to`, Urdu `اس`/`as`).
 - Norwegian (its word list is published as `no`, its layout reports `nb`) and Portuguese (Portugal) layouts.
-- Mirror the setup window for Hebrew and Arabic.
 - Apple Developer ID signing, so updates keep Accessibility access.
 
 ## Contributing

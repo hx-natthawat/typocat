@@ -21,12 +21,14 @@ final class SetupModel: ObservableObject {
     @Published var matchLayout = true
     @Published var learnWords = false
     @Published var matchSite = false
+    @Published var shortcut = UserStore.Shortcut.controlOptionSpace
 
     var setOpenAtLogin: (Bool) -> Void = { _ in }
     var setFixTypos: (Bool) -> Void = { _ in }
     var setMatchLayout: (Bool) -> Void = { _ in }
     var setLearnWords: (Bool) -> Void = { _ in }
     var setMatchSite: (Bool) -> Void = { _ in }
+    var setShortcut: (UserStore.Shortcut) -> Void = { _ in }
     var done: () -> Void = {}
 }
 
@@ -204,7 +206,13 @@ private struct SetupView: View {
         option("Match the keyboard to each app", binding(\.matchLayout, model.setMatchLayout))
         option("Match the keyboard to each website (keeps site names on this Mac)", binding(\.matchSite, model.setMatchSite))
         option("Fix typos too (beta): recieve → receive", binding(\.fixTypos, model.setFixTypos))
-        option("Learn words I convert with ⌃⌥Space (saved on this Mac only)", binding(\.learnWords, model.setLearnWords))
+        option("Learn words I convert by hand (saved on this Mac only)", binding(\.learnWords, model.setLearnWords))
+        Picker("Convert shortcut", selection: Binding(get: { model.shortcut }, set: { model.shortcut = $0; model.setShortcut($0) })) {
+            Text(verbatim: "⌃⌥Space").tag(UserStore.Shortcut.controlOptionSpace)
+            Text("Press Shift twice").tag(UserStore.Shortcut.shiftTwice)
+            Text("Both").tag(UserStore.Shortcut.both)
+        }
+        .fixedSize()
     }
 
     /// A toggle whose label wraps instead of being cut off.
@@ -218,7 +226,9 @@ private struct SetupView: View {
 
     private var footer: some View {
         HStack {
-            Text("⌃⌥Space converts the word you're typing. Undo a fix with Backspace.")
+            Text(model.shortcut == .shiftTwice
+                 ? LocalizedStringKey("Press Shift twice to convert the word you're typing, or the selection. Undo a fix with Backspace.")
+                 : LocalizedStringKey("⌃⌥Space converts the word you're typing, or the selection. Undo a fix with Backspace."))
                 .font(.system(size: 11)).opacity(0.6).fixedSize(horizontal: false, vertical: true)
             Spacer()
             Button(model.trusted ? LocalizedStringKey("Done") : "Later") { model.done() }
@@ -232,7 +242,7 @@ private struct SetupView: View {
 
 /// The direction of the language the app's text is shown in, which SwiftUI in a plain
 /// NSHostingView doesn't pick up by itself.
-private var appLayoutDirection: LayoutDirection {
+var appLayoutDirection: LayoutDirection {
     let language = Bundle.main.preferredLocalizations.first ?? "en"
     return Locale.Language(identifier: language).characterDirection == .rightToLeft ? .rightToLeft : .leftToRight
 }

@@ -12,6 +12,10 @@ final class Interceptor {
 
     var enabled = true
     var onCorrection: ((Correction) -> Void)?
+    /// A fix the user took back, with Backspace or ⌘Z.
+    var onUndo: ((Correction) -> Void)?
+    /// The shortcut found nothing to convert.
+    var onNothingToConvert: (() -> Void)?
     /// A word converted by hand with ⌃⌥Space, for learning.
     var onManualConversion: ((Correction) -> Void)?
     /// Set from the app delegate when the front app changes.
@@ -44,6 +48,9 @@ final class Interceptor {
     /// Words just typed and left alone, each followed by one space, oldest first.
     /// A later fix may reread them (short words like `z,` for ผม are ambiguous alone).
     private var recentWords: [(strokes: [KeyStroke], typed: String, language: Language)] = []
+    /// When Shift was last tapped on its own, for the Shift-twice shortcut.
+    private var lastShiftTap: TimeInterval?
+    private var shiftDown: (at: TimeInterval, clean: Bool)?
 
     private enum Key {
         static let space: UInt16 = 49, returnKey: UInt16 = 36, tab: UInt16 = 48, enter: UInt16 = 76
@@ -61,6 +68,7 @@ final class Interceptor {
     func start() -> Bool {
         guard tap == nil else { return true }
         let mask = (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.keyUp.rawValue)
+            | (1 << CGEventType.flagsChanged.rawValue)
             | (1 << CGEventType.leftMouseDown.rawValue)
             | (1 << CGEventType.rightMouseDown.rawValue)
         let callback: CGEventTapCallBack = { _, type, event, refcon in
@@ -104,15 +112,23 @@ final class Interceptor {
             return nil
         }
         if type == .keyUp { return pass }
+        if type == .flagsChanged {
+            // Modifiers alone don't end a word: Shift is pressed for capitals mid-word.
+            if enabled, !IsSecureEventInputEnabled(), !store.isExcluded(frontBundleID), shiftTappedTwice(event) { convert() }
+            return pass
+        }
+        shiftDown = nil
+        lastShiftTap = nil
         guard type == .keyDown else { reset(); return pass }
         guard enabled, !IsSecureEventInputEnabled(), !store.isExcluded(frontBundleID) else { reset(); return pass }
 
         let keyCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
         let flags = event.flags
 
-        // ⌃⌥Space: convert the current word now, whatever the detector thinks.
-        if flags.contains(.maskControl) && flags.contains(.maskAlternate) && keyCode == Key.space {
-            convertCurrentWord()
+        // ⌃⌥Space: convert the current word, or the selection, whatever the detector thinks.
+        if store.shortcut.usesControlOptionSpace, flags.contains(.maskControl) && flags.contains(.maskAlternate),
+           keyCode == Key.space {
+            convert()
             return nil
         }
         // ⌘Z right after a fix undoes the fix, not the app's last edit.
@@ -205,13 +221,62 @@ final class Interceptor {
         return pass
     }
 
+    /// Shift pressed and released on its own twice within a moment, with no other key between.
+    private func shiftTappedTwice(_ event: CGEvent) -> Bool {
+        guard store.shortcut.usesShiftTwice else { return false }
+        let keyCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
+        let now = ProcessInfo.processInfo.systemUptime
+        let others: CGEventFlags = [.maskCommand, .maskControl, .maskAlternate, .maskSecondaryFn]
+        guard keyCode == 56 || keyCode == 60, event.flags.intersection(others).isEmpty else {
+            shiftDown = nil; lastShiftTap = nil
+            return false
+        }
+        if event.flags.contains(.maskShift) {
+            shiftDown = (now, true)
+            return false
+        }
+        // Released: a tap only if it was quick.
+        guard let down = shiftDown, down.clean, now - down.at < 0.3 else { shiftDown = nil; lastShiftTap = nil; return false }
+        shiftDown = nil
+        if let last = lastShiftTap, now - last < 0.4 {
+            lastShiftTap = nil
+            return true
+        }
+        lastShiftTap = now
+        return false
+    }
+
     // MARK: - Rewriting
+
+    /// The shortcut: the word being typed if there is one, else the selected text.
+    private func convert() {
+        if strokes.isEmpty { convertSelection() } else { convertCurrentWord() }
+    }
+
+    private func convertSelection() {
+        reset()
+        SelectedText.read(post: { self.post($0) }) { text in
+            guard let text, let fix = self.detector.convertText(text, current: self.inputSources.currentLanguage(),
+                                                                layouts: self.inputSources.layouts) else {
+                self.onNothingToConvert?()
+                return
+            }
+            SelectedText.replace(with: fix.replacement, type: { self.replace(scalarCount: 0, with: $0) },
+                                 post: { self.post($0) }) {
+                self.inputSources.select(fix.to)
+                self.onCorrection?(fix)
+            }
+        }
+    }
 
     private func convertCurrentWord() {
         guard !strokes.isEmpty, let current = inputSources.currentLanguage(),
               let typed = inputSources.layouts[current]?.render(strokes),
               let correction = detector.decide(strokes: strokes, typed: typed, current: current,
-                                               layouts: inputSources.layouts, force: true) else { return }
+                                               layouts: inputSources.layouts, force: true) else {
+            onNothingToConvert?()
+            return
+        }
         strokes.removeAll()
         DispatchQueue.main.async {
             guard FocusedText.check(endsWith: correction.original) != .mismatch else { return }
@@ -285,6 +350,7 @@ final class Interceptor {
 
     private func undo(_ correction: Correction, delimiter: CGEvent?, word: String) {
         lastCorrection = nil
+        onUndo?(correction)
         store.ignore(word)
         if store.unlearn(correction.replacement, in: correction.to) { detector.learnedWords = store.learnedWords }
         store.correctLanguage(from: correction.to, to: correction.from, in: frontBundleID)

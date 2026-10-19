@@ -4,8 +4,14 @@
 
 ### New
 - Korean (2-Set): `dkssudgktpdy` → 안녕하세요 and `ㅗ디ㅣㅐ` → hello. Letters join into syllables the way the input method does. 98.5% of Korean words typed on the English layout are fixed, 99.8% the other way, 0.06% of correct text changed.
+- Convert the selection: press the shortcut with nothing typed to convert selected text, a sentence or paragraph at once (`ghbdtn rfr ltkf` → привет как дела). Line breaks are kept.
+- Choose the shortcut: ⌃⌥Space, Shift pressed twice, or both.
+- Exceptions…: see and edit the words TypoCat never changes and the apps it's off in; add names and brands by hand.
+- Each fix flashes the menu bar icon (Show each fix), and VoiceOver reads it aloud.
+- The menu shows how many words were fixed into each language. Counts only.
 
 ### Better detection
+- A known word is no longer changed into one with a capital inside (`쟤가` → `wOrk`).
 - Everyday German and French words the lists lack (`Benutzername`, `Zugangsdaten`, `télétravail`).
 - Punctuation keys that type letters on the other layout: Finnish `ty;` → työ, Czech `dom;` → domů, Hungarian `kiss;` → kissé, Finnish `'l'` → älä. Fixed on Finnish 99.2% → 99.8%, Danish 99.1% → 99.7%, Italian 98.0% → 98.8%, Hebrew 94.3% → 95.6%; correct text changed stays the same.
 

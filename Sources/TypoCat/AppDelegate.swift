@@ -18,9 +18,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                            keyEquivalent: "")
     private var typoItem = NSMenuItem(title: L("Fix typos (beta)"), action: #selector(toggleFixTypos), keyEquivalent: "")
     private var loginItem = NSMenuItem(title: L("Open at login"), action: #selector(toggleOpenAtLogin), keyEquivalent: "")
-    private var learnItem = NSMenuItem(title: L("Learn words I convert with ⌃⌥Space"), action: #selector(toggleLearnWords),
+    private var learnItem = NSMenuItem(title: L("Learn words I convert by hand"), action: #selector(toggleLearnWords),
                                        keyEquivalent: "")
     private var forgetItem = NSMenuItem(title: "", action: #selector(forgetLearnedWords), keyEquivalent: "")
+    private var showFixesItem = NSMenuItem(title: L("Show each fix"), action: #selector(toggleShowFixes), keyEquivalent: "")
+    private var countItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    private var hintItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    private var shortcutItems: [NSMenuItem] = []
     /// The last app that wasn't us; opening our menu doesn't change it.
     private var frontApp: NSRunningApplication?
     private var permissionTimer: Timer?
@@ -32,6 +36,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var loadedLanguages: Set<Language> = []
     private let setup = SetupModel()
     private lazy var setupWindow = SetupWindowController(model: setup)
+    private let exceptions = ExceptionsModel()
+    private lazy var exceptionsWindow = ExceptionsWindowController(model: exceptions)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         inputSources.reload()
@@ -39,9 +45,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         interceptor = Interceptor(detector: Detector(dictionaries: [:]),
                                   inputSources: inputSources, store: store)
         interceptor.onCorrection = { [weak self] c in
-            self?.lastCorrectionItem.title = String(format: L("Last: %@ → %@"), c.original, c.replacement)
-            self?.setup.lastFix = "\(c.original) → \(c.replacement)"
+            guard let self else { return }
+            self.lastCorrectionItem.title = String(format: L("Last: %@ → %@"), c.original, c.replacement)
+            self.setup.lastFix = "\(c.original) → \(c.replacement)"
+            // Spelling fixes stay in their language; count words that changed layout.
+            if c.from != c.to { self.store.countFix(into: c.to) }
+            self.refreshCount()
+            self.showFix(c)
         }
+        interceptor.onUndo = { [weak self] c in
+            if c.from != c.to { self?.store.countFix(into: c.to, by: -1) }
+            self?.refreshCount()
+            self?.refreshExceptions()
+        }
+        interceptor.onNothingToConvert = { NSSound.beep() }
         interceptor.onManualConversion = { [weak self] c in
             guard let self, self.store.learn(c.replacement, in: c.to) else { return }
             self.interceptor.detector.learnedWords = self.store.learnedWords
@@ -79,6 +96,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setup.setMatchLayout = { [weak self] on in
             if self?.store.matchLayoutPerApp != on { self?.toggleMatchLayout() }
         }
+        setup.shortcut = store.shortcut
+        setup.setShortcut = { [weak self] in self?.setShortcut($0) }
         setup.done = { [weak self] in
             if self?.setup.trusted == true { UserDefaults.standard.set(true, forKey: "setupDone") }
             self?.setupWindow.close()
@@ -164,11 +183,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(forgetItem)
         menu.addItem(loginItem)
         menu.addItem(permissionItem)
+        showFixesItem.target = self
+        showFixesItem.state = store.showFixes ? .on : .off
+        menu.addItem(showFixesItem)
+        let shortcutMenu = NSMenu()
+        for shortcut in UserStore.Shortcut.allCases {
+            let item = NSMenuItem(title: Self.title(of: shortcut), action: #selector(chooseShortcut(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = shortcut.rawValue
+            shortcutMenu.addItem(item)
+            shortcutItems.append(item)
+        }
+        let shortcutItem = NSMenuItem(title: L("Convert shortcut"), action: nil, keyEquivalent: "")
+        shortcutItem.submenu = shortcutMenu
+        menu.addItem(shortcutItem)
+        let exceptionsItem = NSMenuItem(title: L("Exceptions…"), action: #selector(showExceptions), keyEquivalent: "")
+        exceptionsItem.target = self
+        menu.addItem(exceptionsItem)
         menu.addItem(.separator())
         menu.addItem(lastCorrectionItem)
-        let hint = NSMenuItem(title: L("⌃⌥Space converts the current word"), action: nil, keyEquivalent: "")
-        hint.isEnabled = false
-        menu.addItem(hint)
+        hintItem.isEnabled = false
+        menu.addItem(hintItem)
+        countItem.isEnabled = false
+        menu.addItem(countItem)
+        refreshShortcut()
+        refreshCount()
         menu.addItem(.separator())
         let setupItem = NSMenuItem(title: L("Setup…"), action: #selector(showSetup), keyEquivalent: "")
         setupItem.target = self
@@ -331,6 +370,90 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         store.setExcluded(id, !store.isExcluded(id))
         interceptor.reset()
         refreshTitle()
+        refreshExceptions()
+    }
+
+    // MARK: - Exceptions
+
+    @objc private func showExceptions() {
+        refreshExceptions()
+        exceptions.addWord = { [weak self] word in
+            self?.store.ignore(Detector.learnable(word))
+            self?.refreshExceptions()
+        }
+        exceptions.removeWord = { [weak self] word in
+            self?.store.unignore(word)
+            self?.refreshExceptions()
+        }
+        exceptions.removeApp = { [weak self] id in
+            self?.store.setExcluded(id, false)
+            self?.refreshTitle()
+            self?.refreshExceptions()
+        }
+        exceptionsWindow.show()
+    }
+
+    private func refreshExceptions() {
+        exceptions.words = store.ignoredWords.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+        exceptions.apps = store.excludedApps.map { id in
+            let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id)
+            let name = url.map { FileManager.default.displayName(atPath: $0.path).replacingOccurrences(of: ".app", with: "") } ?? id
+            return ExceptionsModel.App(id: id, name: name, icon: url.map { NSWorkspace.shared.icon(forFile: $0.path) })
+        }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    // MARK: - Shortcut and feedback
+
+    private static func title(of shortcut: UserStore.Shortcut) -> String {
+        switch shortcut {
+        case .controlOptionSpace: return "⌃⌥Space"
+        case .shiftTwice: return L("Press Shift twice")
+        case .both: return L("Both")
+        }
+    }
+
+    @objc private func chooseShortcut(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let shortcut = UserStore.Shortcut(rawValue: raw) else { return }
+        setShortcut(shortcut)
+    }
+
+    private func setShortcut(_ shortcut: UserStore.Shortcut) {
+        store.shortcut = shortcut
+        setup.shortcut = shortcut
+        refreshShortcut()
+    }
+
+    private func refreshShortcut() {
+        for item in shortcutItems { item.state = item.representedObject as? String == store.shortcut.rawValue ? .on : .off }
+        hintItem.title = String(format: L("%@ converts the current word or the selection"), Self.title(of: store.shortcut))
+    }
+
+    private func refreshCount() {
+        let counts = store.fixCounts.filter { $0.value > 0 }
+        let total = counts.values.reduce(0, +)
+        countItem.isHidden = total == 0
+        let parts = counts.sorted { $0.value > $1.value }.prefix(4).map { "\($0.key.shortName) \($0.value)" }
+        let list = parts.joined(separator: " · ")
+        countItem.title = total == 1 ? String(format: L("1 word fixed: %@"), list) : String(format: L("%d words fixed: %@"), total, list)
+    }
+
+    @objc private func toggleShowFixes() {
+        store.showFixes.toggle()
+        showFixesItem.state = store.showFixes ? .on : .off
+    }
+
+    /// A short flash of the menu bar icon, and with VoiceOver on, the fix read aloud.
+    private func showFix(_ c: Correction) {
+        if store.showFixes, let button = statusItem.button {
+            button.highlight(true)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { button.highlight(false) }
+        }
+        if NSWorkspace.shared.isVoiceOverEnabled {
+            NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested, userInfo: [
+                .announcement: String(format: L("Fixed: %@"), c.replacement),
+                .priority: NSAccessibilityPriorityLevel.high.rawValue,
+            ])
+        }
     }
 
     @objc private func toggleEnabled() {

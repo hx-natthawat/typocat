@@ -103,7 +103,7 @@ public final class Detector: @unchecked Sendable {
     public func decide(strokes: [KeyStroke], typed: String, current: Language,
                        layouts: [Language: LayoutMap], ignoring ignored: Set<String> = [],
                        category: AppCategory = .general, force: Bool = false) -> Correction? {
-        guard force || strokes.count >= minimumStrokes, !ignored.contains(typed) else { return nil }
+        guard force || strokes.count >= minimumStrokes, !Self.isIgnored(typed, in: ignored) else { return nil }
         if !force && ProtectedWords.contains(typed, in: category) { return nil }
         let typedScore = score(typed, as: current)
         // Words spelled with an edge apostrophe ('em, goin') are words, not stray keys.
@@ -149,7 +149,7 @@ public final class Detector: @unchecked Sendable {
                               layouts: [Language: LayoutMap], ignoring ignored: Set<String> = [],
                               category: AppCategory = .general) -> Correction? {
         guard category != .terminal, category != .code, strokes.count >= midWordMinimumStrokes,
-              !current.writesWithoutSpaces, !ignored.contains(typed), let dict = dictionary(for: current) else { return nil }
+              !current.writesWithoutSpaces, !Self.isIgnored(typed, in: ignored), let dict = dictionary(for: current) else { return nil }
         // Anything that may still become a word here ("(hel", "don'") waits for Space.
         let word = typed.trimmingCharacters(in: Self.edgePunctuation)
         if word.isEmpty || dict.hasPrefix(word) || ProtectedWords.contains(typed, in: category) { return nil }
@@ -171,7 +171,7 @@ public final class Detector: @unchecked Sendable {
                        layouts: [Language: LayoutMap], ignoring ignored: Set<String> = [],
                        category: AppCategory = .general) -> String? {
         let keepScore = rereadKeepScore(target)
-        guard target != current, keepScore != nil || strokes.count == 1, !ignored.contains(typed),
+        guard target != current, keepScore != nil || strokes.count == 1, !Self.isIgnored(typed, in: ignored),
               !ProtectedWords.contains(typed, in: category),
               let alt = layouts[target]?.render(strokes), alt != typed else { return nil }
         let altScore = score(alt, as: target), typedScore = score(typed, as: current)
@@ -199,6 +199,12 @@ public final class Detector: @unchecked Sendable {
         zip(text.unicodeScalars, text.unicodeScalars.dropFirst()).contains {
             $0.properties.isLowercase && $1.properties.isUppercase
         }
+    }
+
+    /// Words are left alone as typed (an undone fix) or in their plain form (added by hand: "github"
+    /// covers "GitHub,").
+    public static func isIgnored(_ typed: String, in ignored: Set<String>) -> Bool {
+        !ignored.isEmpty && (ignored.contains(typed) || ignored.contains(learnable(typed)))
     }
 
     /// The form a learned word is kept in: lowercase, without edge punctuation.

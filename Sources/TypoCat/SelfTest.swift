@@ -64,6 +64,21 @@ enum SelfTest {
             print("\(pass ? "PASS" : "FAIL") [\(other)→\(language)] \(typed) → \(fix?.replacement ?? "nil")  (expected \(c.fix ? c.word : "nil"); untouched-when-correct: \(leftAlone))")
         }
 
+        // Selected text converted at once: a sentence typed on the wrong layout, back to what was meant.
+        for (meant, language) in [("привет как дела", "ru"), ("안녕하세요 감사합니다", "ko"), ("สวัสดีครับ\nขอบคุณ", "th")] {
+            let target = Language(rawValue: language)
+            guard let intended = layouts[target], detector.languages.contains(target) else { continue }
+            let typed = meant.split(separator: "\n", omittingEmptySubsequences: false).map { line in
+                line.split(separator: " ").compactMap { word in strokes(for: String(word), in: intended).flatMap(en.render) }.joined(separator: " ")
+            }.joined(separator: "\n")
+            let pair = [Language.english: en, target: intended]
+            let fix = detector.convertText(typed, current: .english, layouts: pair)
+            let pass = fix?.replacement == meant
+                && detector.convertText(meant, current: target, layouts: pair) == nil
+            ok = ok && pass
+            print("\(pass ? "PASS" : "FAIL") selection [en→\(language)] \(typed.debugDescription) → \((fix?.replacement ?? "nil").debugDescription)")
+        }
+
         // Commands typed correctly in a terminal must be left alone even if not dictionary words.
         if let th = layouts[.thai] {
             for command in ["git", "kubectl", "pnpm", "chmod"] {

@@ -67,6 +67,22 @@ if let i = CommandLine.arguments.firstIndex(of: "--render-setup"), i + 1 < Comma
     try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: CommandLine.arguments[i + 1]))
     exit(0)
 }
+// The same for the Exceptions window: `--render-exceptions out.png`
+if let i = CommandLine.arguments.firstIndex(of: "--render-exceptions"), i + 1 < CommandLine.arguments.count {
+    _ = NSApplication.shared
+    let model = ExceptionsModel()
+    model.words = ["github", "natthawat", "typocat"]
+    model.apps = [.init(id: "com.apple.Terminal", name: "Terminal", icon: NSImage(named: NSImage.applicationIconName))]
+    let window = ExceptionsWindowController(model: model).window!
+    // Unlike the setup window this one has no painted background: render it light so text shows.
+    window.appearance = NSAppearance(named: .aqua)
+    let view = window.contentView!
+    view.layoutSubtreeIfNeeded()
+    let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds)!
+    view.cacheDisplay(in: view.bounds, to: rep)
+    try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: CommandLine.arguments[i + 1]))
+    exit(0)
+}
 if let i = CommandLine.arguments.firstIndex(of: "--eval-typos") {
     SelfTest.evaluateTypos(top: CommandLine.arguments.dropFirst(i + 1).first.flatMap { Int($0) } ?? 5000)
     exit(0)
