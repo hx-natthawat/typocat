@@ -8,28 +8,45 @@ final class InputSources {
     private var sources: [Language: TISInputSource] = [:]
     /// Each enabled layout's name as System Settings shows it ("Thai", "ABC").
     private(set) var names: [Language: String] = [:]
+    /// Input source ID → its key in `layouts`, which is a variant (en+dvorak) for a second
+    /// layout of a language.
+    private var keys: [String: Language] = [:]
 
     func reload() {
         layouts = [:]
         sources = [:]
         names = [:]
+        keys = [:]
         let filter = [
             kTISPropertyInputSourceCategory as String: kTISCategoryKeyboardInputSource as String,
             kTISPropertyInputSourceIsSelectCapable as String: true,
         ] as CFDictionary
         guard let list = TISCreateInputSourceList(filter, false)?.takeRetainedValue() as? [TISInputSource] else { return }
         for source in list {
-            guard let language = Self.language(of: source), sources[language] == nil,
-                  let map = Self.buildMap(source: source, language: language) else { continue }
+            guard let base = Self.language(of: source), var map = Self.buildMap(source: source, language: base) else { continue }
+            var language = base
+            if let first = layouts[base] {
+                // A second layout counts only if it moves letters (Dvorak next to ABC).
+                guard map.movesLetters(comparedTo: first) else { continue }
+                language = Language(base, variant: Self.variantName(of: source))
+                guard layouts[language] == nil else { continue }
+                map = map.named(language)
+            }
             sources[language] = source
             layouts[language] = map
+            keys[Self.idOf(source)] = language
             names[language] = Self.property(source, kTISPropertyLocalizedName) ?? language.shortName
         }
     }
 
     func currentLanguage() -> Language? {
         guard let source = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue() else { return nil }
-        return Self.language(of: source)
+        return keys[Self.idOf(source)] ?? Self.language(of: source)
+    }
+
+    /// "com.apple.keylayout.Dvorak" → "dvorak".
+    private static func variantName(of source: TISInputSource) -> String {
+        String(idOf(source).split(separator: ".").last ?? "alt")
     }
 
     func select(_ language: Language) {
@@ -60,9 +77,14 @@ final class InputSources {
         // Prefer each language's plain layout ("Russian", "Hebrew") over variants.
         let sorted = list.sorted { (Self.idOf($0)).count < (Self.idOf($1)).count }
         for source in sorted {
-            guard let language = language(of: source), out[language] == nil,
-                  let map = buildMap(source: source, language: language) else { continue }
-            out[language] = map
+            guard let language = language(of: source), let map = buildMap(source: source, language: language) else { continue }
+            if let first = out[language] {
+                // Also every variant that moves letters, for LS_LANGS=en+dvorak.
+                let variant = Language(language, variant: variantName(of: source))
+                if out[variant] == nil && map.movesLetters(comparedTo: first) { out[variant] = map.named(variant) }
+            } else {
+                out[language] = map
+            }
         }
         return out
     }

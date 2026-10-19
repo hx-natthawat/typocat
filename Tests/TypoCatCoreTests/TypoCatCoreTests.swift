@@ -187,6 +187,29 @@ final class TypoCatCoreTests: XCTestCase {
         XCTAssertEqual(d.rereadKeepScore(Language(rawValue: "he")), 0.65)
     }
 
+    func testLayoutVariantsShareTheirLanguagesWordList() {
+        let dvorak = Language(rawValue: "en+dvorak")
+        XCTAssertEqual(dvorak.base, .english)
+        XCTAssertEqual(dvorak.variant, "dvorak")
+        XCTAssertEqual(dvorak.shortName, "DV")
+        XCTAssertEqual(Language(.english, variant: "Colemak").rawValue, "en+colemak")
+        XCTAssertNil(Language.english.variant)
+
+        // Keys 0...2 type h e y on QWERTY and d . f on Dvorak; "hey" typed on Dvorak keys reads "d.f".
+        func map(_ letters: [String], _ language: Language) -> LayoutMap {
+            var forward: [KeyStroke: String] = [:]
+            for (i, s) in letters.enumerated() { forward[KeyStroke(keyCode: UInt16(i), shift: false)] = s }
+            return LayoutMap(language: language, inputSourceID: "test.\(language)", forward: forward)
+        }
+        let qwerty = map(["h", "e", "y"], .english), dv = map(["d", ".", "f"], dvorak)
+        XCTAssertTrue(dv.movesLetters(comparedTo: qwerty))
+        XCTAssertFalse(qwerty.movesLetters(comparedTo: map(["h", "e", "y"], dvorak)))
+        let d = Detector(dictionaries: [.english: FrequencyDictionary(contents: "hey 50\n")])
+        let fix = d.decide(strokes: strokes([0, 1, 2]), typed: "d.f", current: dvorak, layouts: [.english: qwerty, dvorak: dv])
+        XCTAssertEqual(fix?.replacement, "hey")
+        XCTAssertEqual(fix?.to, .english)
+    }
+
     func testTypoFixPicksClearWinner() {
         let d = detector()
         XCTAssertNil(d.typoFix("helo", in: .english))                 // hello 5000 vs hell 900: not 10x apart

@@ -43,8 +43,8 @@ public final class Detector: @unchecked Sendable {
     /// 0.65 changes none of the top 5000 and at most 0.04% of short English as used, for
     /// 35-56% recovered. Into English it isn't measured (~3% of Thai at 0.8), so it stays off.
     public var rereadKeepScore: @Sendable (Language) -> Double? = {
-        if $0 == .english { return nil }
-        return $0.writesWithoutSpaces || ["ru", "kk"].contains($0.rawValue) ? 0.8 : 0.65
+        if $0.base == .english { return nil }
+        return $0.writesWithoutSpaces || ["ru", "kk"].contains($0.base.rawValue) ? 0.8 : 0.65
     }
     /// Any language takes back a one-key word left alone before a fix ("ณ love" → "I love")
     /// when that letter is a word this common in it: about the top 10 words.
@@ -68,9 +68,9 @@ public final class Detector: @unchecked Sendable {
 
     /// 0...1 confidence that `text` is real text in `language`.
     public func score(_ text: String, as language: Language) -> Double {
-        guard let dict = dictionaries[language] else { return 0 }
+        guard let dict = dictionary(for: language) else { return 0 }
         if language.writesWithoutSpaces {
-            if language == .thai && !ThaiOrthography.isPlausible(text) { return 0 }
+            if language.base == .thai && !ThaiOrthography.isPlausible(text) { return 0 }
             if dict.count(of: text) > 0 { return 0.6 + 0.4 * dict.commonness(of: text) }
             guard text.unicodeScalars.allSatisfy(Self.isWordScalar) else { return 0 }
             let coverage = dict.segmentCoverage(text)
@@ -79,13 +79,17 @@ public final class Detector: @unchecked Sendable {
         var word = text.trimmingCharacters(in: Self.edgePunctuation).lowercased()
         // Apostrophes belong inside words (don't, 'em) but are also quotes: 'to' is to.
         if dict.count(of: word) == 0 { word = word.trimmingCharacters(in: Self.quotes) }
-        guard !word.isEmpty, word.unicodeScalars.allSatisfy(Self.isWordScalar),
+        // Digits count inside known words: French "1er", "2e".
+        guard !word.isEmpty, word.unicodeScalars.allSatisfy({ Self.isWordScalar($0) || $0.properties.numericType == .decimal }),
               dict.count(of: word) > 0 else { return 0 }
         return 0.6 + 0.4 * dict.commonness(of: word)
     }
 
     /// Languages with a loaded word list.
     public var languages: Set<Language> { Set(dictionaries.keys) }
+
+    /// The word list for `language`; a layout variant (en+dvorak) uses its base language's.
+    public func dictionary(for language: Language) -> FrequencyDictionary? { dictionaries[language.base] }
 
     /// - Parameter force: the user explicitly asked to convert; take the best
     ///   alternative even when neither rendering is a known word.
@@ -97,7 +101,7 @@ public final class Detector: @unchecked Sendable {
         let typedScore = score(typed, as: current)
         // Words spelled with an edge apostrophe ('em, goin') are words, not stray keys.
         let punctuated = Self.hasUnusualPunctuation(typed) || (Self.hasUnpairedQuote(typed)
-            && dictionaries[current]?.count(of: typed.trimmingCharacters(in: Self.edgePunctuation)) ?? 0 == 0)
+            && dictionary(for: current)?.count(of: typed.trimmingCharacters(in: Self.edgePunctuation)) ?? 0 == 0)
         /// Beyond the reject threshold only a clearly more common alternative can win.
         func beats(_ altScore: Double, typed typedScore: Double) -> Bool {
             let required = typedScore > rejectThreshold ? typedScore + dominanceMargin : 0
@@ -107,6 +111,12 @@ public final class Detector: @unchecked Sendable {
         var best: (Correction, Double, wins: Bool)?
         for (language, layout) in layouts where language != current {
             guard let alt = layout.render(strokes), alt != typed else { continue }
+            // The reverse of `punctuated`: keys that type letters here type punctuation there
+            // (French "min" is ";in" on US, Italian "em" is "e,", Russian "уж" is "e;"). A known
+            // word never turns into a shorter one plus punctuation, or one with stray punctuation
+            // (Greek "ά" is ";a"); gibberish may ("@john").
+            if typedScore > 0 && !punctuated
+                && (Self.coreLength(alt) < Self.coreLength(typed) || Self.hasUnusualPunctuation(alt)) { continue }
             let s = score(alt, as: language)
             let lettersOnly = punctuated && alt.unicodeScalars.allSatisfy(Self.isWordScalar)
             let wins = beats(s, typed: lettersOnly ? typedScore * strippedPunctuationWeight : typedScore)
@@ -124,13 +134,13 @@ public final class Detector: @unchecked Sendable {
                               layouts: [Language: LayoutMap], ignoring ignored: Set<String> = [],
                               category: AppCategory = .general) -> Correction? {
         guard category != .terminal, category != .code, strokes.count >= midWordMinimumStrokes,
-              !current.writesWithoutSpaces, !ignored.contains(typed), let dict = dictionaries[current] else { return nil }
+              !current.writesWithoutSpaces, !ignored.contains(typed), let dict = dictionary(for: current) else { return nil }
         // Anything that may still become a word here ("(hel", "don'") waits for Space.
         let word = typed.trimmingCharacters(in: Self.edgePunctuation)
         if word.isEmpty || dict.hasPrefix(word) || ProtectedWords.contains(typed, in: category) { return nil }
         for (language, layout) in layouts where language.writesWithoutSpaces {
-            guard let alt = layout.render(strokes), let altDict = dictionaries[language],
-                  language != .thai || ThaiOrthography.isPlausible(alt),
+            guard let alt = layout.render(strokes), let altDict = dictionary(for: language),
+                  language.base != .thai || ThaiOrthography.isPlausible(alt),
                   alt.unicodeScalars.allSatisfy(Self.isWordScalar),
                   // Every key so far is part of a word: the run ends on a word boundary.
                   altDict.count(of: alt) > 0 || altDict.segmentCoverage(alt) >= 0.999 else { continue }
@@ -168,6 +178,9 @@ public final class Detector: @unchecked Sendable {
         return scalars[..<first].contains { !usualLeading.contains($0) }
             || scalars[(last + 1)...].contains { !usualTrailing.contains($0) }
     }
+
+    /// Scalars left once edge punctuation is trimmed.
+    static func coreLength(_ text: String) -> Int { text.trimmingCharacters(in: edgePunctuation).unicodeScalars.count }
 
     /// A quote with no partner ('nj is это on Russian) is more likely a letter key.
     static func hasUnpairedQuote(_ typed: String) -> Bool {

@@ -28,6 +28,11 @@ enum SelfTest {
             ("ευχαριστώ", "el", "en", true), ("καλημέρα", "el", "en", true), ("και", "el", "en", true),
             ("سلام", "fa", "en", true), ("здраво", "sr", "en", true), ("здравей", "bg", "en", true),
             ("გამარჯობა", "ka", "en", true), ("շնորհակալություն", "hy", "en", true),
+            // Latin layouts that move letters: AZERTY, QWERTZ, umlauts on punctuation keys.
+            ("maison", "fr", "en", true), ("für", "de", "en", true), ("yes", "en", "de", true),
+            ("señor", "es", "en", true), ("hyvä", "fi", "en", true),
+            // A second layout for the same language: Dvorak or Colemak next to QWERTY.
+            ("hello", "en+dvorak", "en", true), ("people", "en", "en+dvorak", true), ("meeting", "en+colemak", "en", true),
             // From Data/extra: everyday words the subtitle lists lack.
             ("ลาย", "th", "en", true), ("ภาษี", "th", "en", true), ("скриншот", "ru", "en", true),
         ]
@@ -40,7 +45,7 @@ enum SelfTest {
                 print("SKIP \(c.word): no \(language) or \(other) layout installed")
                 continue
             }
-            guard detector.languages.contains(language) else {
+            guard detector.languages.contains(language.base) else {
                 print("SKIP \(c.word): no \(language) word list in Data/ (run scripts/build-app.sh)")
                 continue
             }
@@ -89,7 +94,9 @@ enum SelfTest {
     static func evaluate(top n: Int) {
         let layouts = InputSources.installedLayouts()
         guard let en = layouts[.english] else { print("no English layout installed"); return }
-        let languages = Language.bundled.filter { layouts[$0] != nil && Dictionaries.url(for: $0) != nil }
+        // LS_LANGS=fr,de measures languages that aren't bundled yet.
+        let only = ProcessInfo.processInfo.environment["LS_LANGS"].map { $0.split(separator: ",").map { Language(rawValue: String($0)) } }
+        let languages = ([.english] + (only ?? Language.bundled)).filter { layouts[$0] != nil && Dictionaries.url(for: $0) != nil }
         let detector = Dictionaries.makeDetector(for: languages)
         let englishList = Dictionaries.load(.english)
         print("lang  layout                               | fixed on EN layout | EN fixed on it | correct text changed")
@@ -295,14 +302,19 @@ enum SelfTest {
         var total = 0, fixed = 0, changed = 0
         var misses: [String] = []
         for word in words {
-            guard let st = strokes(for: word, in: intended), st.count >= 2, let typed = wrong.render(st) else { continue }
+            // Latin layouts share most keys: a word that comes out the same on both needs no fix.
+            guard let st = strokes(for: word, in: intended), st.count >= 2, let typed = wrong.render(st),
+                  typed != word else { continue }
             total += 1
             if detector.decide(strokes: st, typed: typed, current: wrong.language, layouts: layouts)?.replacement == word {
                 fixed += 1
             } else if misses.count < 16 {
                 misses.append("\(word)(\(typed))")
             }
-            if detector.decide(strokes: st, typed: word, current: intended.language, layouts: layouts) != nil { changed += 1 }
+            if let fix = detector.decide(strokes: st, typed: word, current: intended.language, layouts: layouts) {
+                changed += 1
+                if ProcessInfo.processInfo.environment["LS_SHOW_CHANGED"] == "1" { print("      changed: \(word) → \(fix.replacement)") }
+            }
         }
         return (total, 100 * Double(fixed) / Double(max(1, total)), changed, misses)
     }

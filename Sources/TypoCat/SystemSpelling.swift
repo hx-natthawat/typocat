@@ -7,7 +7,7 @@ enum SystemSpelling {
     /// nil when macOS has no spelling dictionary for the language.
     static func isKnown(_ word: String, in language: Language) -> Bool? {
         let checker = NSSpellChecker.shared
-        guard let code = checker.availableLanguages.first(where: { Language(rawValue: $0) == language }) else { return nil }
+        guard let code = checker.availableLanguages.first(where: { Language(rawValue: $0) == language.base }) else { return nil }
         let miss = checker.checkSpelling(of: word, startingAt: 0, language: code, wrap: false,
                                          inSpellDocumentWithTag: 0, wordCount: nil)
         return miss.location == NSNotFound
@@ -23,7 +23,7 @@ enum SystemSpelling {
     /// macOS without a working dictionary (Ukrainian, Greek, Hebrew on this Mac) never agree.
     static func agrees(typo: String, fix: String, in language: Language) -> Bool {
         let checker = NSSpellChecker.shared
-        guard let code = checker.availableLanguages.first(where: { Language(rawValue: $0) == language }) else { return false }
+        guard let code = checker.availableLanguages.first(where: { Language(rawValue: $0) == language.base }) else { return false }
         let word = typo.trimmingCharacters(in: .letters.inverted)
         let target = fix.trimmingCharacters(in: .letters.inverted)
         guard isKnown(word, in: language) == false else { return false }

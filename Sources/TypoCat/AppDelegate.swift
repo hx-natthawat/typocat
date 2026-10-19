@@ -278,7 +278,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 enum Dictionaries {
     /// Looks in the app bundle first (compiled by build-app.sh), then ./Data for `swift run` during development.
     static func url(for language: Language) -> URL? {
-        let name = "\(language.rawValue)_50k"
+        let name = "\(language.base.rawValue)_50k"
         if let url = Bundle.main.url(forResource: name, withExtension: "tcdict") { return url }
         if let url = Bundle.main.url(forResource: name, withExtension: "txt") { return url }
         let dev = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
@@ -331,7 +331,7 @@ enum Dictionaries {
     /// from disk, so this takes milliseconds; text lists (`swift run`) are parsed first.
     static func makeDetector(for languages: some Sequence<Language>) -> Detector {
         var dicts: [Language: FrequencyDictionary] = [:]
-        for language in Set(languages) { dicts[language] = load(language) }
+        for language in Set(languages.map(\.base)) { dicts[language] = load(language) }
         // Hand the freed parsing buffers back to the system, or they stay in the footprint.
         malloc_zone_pressure_relief(nil, 0)
         return Detector(dictionaries: dicts)

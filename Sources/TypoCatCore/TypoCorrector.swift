@@ -10,7 +10,7 @@ extension Detector {
                         category: AppCategory = .general) -> String? {
         guard !language.writesWithoutSpaces, category != .terminal, category != .code,
               !ignored.contains(typed), !ProtectedWords.contains(typed, in: category),
-              let dict = dictionaries[language] else { return nil }
+              let dict = dictionary(for: language) else { return nil }
         // Keep edge punctuation ("becuase," → "because,") and fix only the word inside.
         let scalars = typed.unicodeScalars
         guard let start = scalars.firstIndex(where: { $0.properties.isAlphabetic }),
