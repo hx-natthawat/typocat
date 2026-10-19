@@ -7,9 +7,11 @@
 ![License: MIT](https://img.shields.io/badge/license-MIT-F2A12B)
 
 A macOS menu-bar app that fixes words typed on the wrong keyboard layout
-(`ghbdtn` → `привет`, `akuo` → `שלום`, `l;ylfu` → `สวัสดี`, `руддщ` → `hello`)
-and switches the layout for you. It works with any layout macOS has; detection
-needs a word list for the layout's language.
+(`ghbdtn` → `привет`, `akuo` → `שלום`, `l;ylfu` → `สวัสดี`, `руддщ` → `hello`,
+`;qison` → `maison`, `jdpps` → `hello` on Dvorak) and switches the layout for
+you. It works with any layout macOS has; detection needs a word list for the
+layout's language. The menus and setup window are in English, Thai, Russian,
+Ukrainian, German, French, Spanish, Hebrew, Arabic, Greek and Turkish.
 
 <p align="center"><img src="docs/brand/demo.svg" width="720" alt="Animation: ghbdtn becomes привет, l;ylfu becomes สวัสดี, akuo becomes שלום, руддщ becomes hello when Space is pressed"></p>
 
@@ -23,6 +25,7 @@ open build/TypoCat.app       # grant Accessibility access when asked
 swift run TypoCat --selftest # detector checks against this Mac's real layouts
 swift run TypoCat --eval 5000 # per-language fix rate, using every layout installed on this Mac
 swift run TypoCat --eval-typos 5000 # typo correction: fix rate, wrong fixes, false changes
+swift run TypoCat --eval-midword 3000 # Thai fixed before Space, and English changed by it
 ```
 
 Enable the layouts you type with in System Settings → Keyboard → Input Sources.
@@ -37,37 +40,66 @@ that get changed by mistake.
 
 | Language | Layout | Fixed (typed on EN) | EN fixed (typed on it) | Changed |
 |---|---|---|---|---|
-| Russian | Russian | 99.0% | 99.3% | 0.02% |
-| Ukrainian | Ukrainian | 98.4% | 99.3% | 0.03% |
+| Russian | Russian | 99.0% | 99.3% | 0.00% |
+| Ukrainian | Ukrainian | 98.4% | 99.3% | 0.00% |
 | Bulgarian | Bulgarian | 98.4% | 99.0% | 0.01% |
-| Serbian | Serbian | 90.0% | 78.6% | 0.08% |
-| Macedonian | Macedonian | 91.0% | 88.8% | 0.08% |
+| Serbian | Serbian | 90.2% | 82.1% | 0.03% |
+| Macedonian | Macedonian | 91.0% | 88.8% | 0.06% |
 | Kazakh | Kazakh | 99.6% | 99.8% | 0.00% |
-| Greek | Greek | 97.1% | 96.3% | 0.03% |
-| Hebrew | Hebrew | 94.3% | 97.7% | 0.02% |
-| Arabic | Arabic | 97.3% | 98.7% | 0.02% |
-| Persian | Persian | 96.6% | 98.7% | 0.07% |
-| Urdu | Urdu | 88.2% | 97.5% | 0.11% |
+| Greek | Greek | 97.1% | 96.3% | 0.02% |
+| Hebrew | Hebrew | 94.3% | 97.7% | 0.00% |
+| Arabic | Arabic | 97.3% | 98.7% | 0.00% |
+| Persian | Persian | 96.6% | 98.7% | 0.00% |
+| Urdu | Urdu | 88.3% | 97.5% | 0.11% |
 | Armenian | Armenian HM QWERTY | 91.1% | 98.4% | 0.06% |
 | Georgian | Georgian QWERTY | 93.4% | 98.1% | 0.01% |
-| Hindi | Devanagari | 95.0% | 99.0% | 0.10% |
-| Thai | Thai | 98.4% | 99.0% | 0.02% |
+| Hindi | Devanagari | 95.0% | 99.0% | 0.03% |
+| Thai | Thai | 98.3% | 99.0% | 0.01% |
+| French | French (AZERTY) | 99.1% | 97.9% | 0.03% |
+| German | German (QWERTZ) | 99.1% | 98.4% | 0.00% |
+| Spanish | Spanish | 100.0% | 100.0% | 0.00% |
+| Italian | Italian | 98.0% | 93.6% | 0.08% |
+| Turkish | Turkish (F) | 98.3% | 98.9% | 0.02% |
+| Czech | Czech (QWERTZ) | 99.2% | 98.4% | 0.15% |
+| Swedish | Swedish | 99.7% | 97.2% | 0.00% |
+| Hungarian | Hungarian (QWERTZ) | 99.3% | 98.1% | 0.03% |
+| Danish | Danish | 99.1% | 91.7% | 0.00% |
+| Finnish | Finnish | 99.2% | 100.0% | 0.00% |
+| English | Dvorak (next to QWERTY) | 96.6% | 96.0% | 0.00% |
+| English | Colemak (next to QWERTY) | 96.9% | 96.9% | 0.02% |
 
 Most misses are two-letter words that are real words in both languages
 (`да`/`lf`, `το`/`to`). Serbian and Macedonian layouts are phonetic, so many
 English words are also valid Cyrillic words. The Serbian list is mostly Latin
-script and is transliterated to Cyrillic on load. Greek accents are typed with
-dead keys, which are supported.
+script and is transliterated to Cyrillic on load, leaving out English quoted in
+subtitles (`out`, `but`). Greek accents are typed with dead keys, which are
+supported.
+
+On Latin layouts most words come out the same on both, so only words that use
+moved keys count (French has 3394 of the top 5000; Spanish, with only `ñ`, has
+889). Czech's changed words are subtitle formatting codes from its list
+(`blur0.7`), not words anyone types. A second layout for the same language
+(Dvorak or Colemak next to ABC) gets its own entry, shown as `DV` or `CO`, and
+shares the language's word list.
 
 Short words left alone are reread once a later word is fixed into the same
-language (`lf ghbdtn` → `да привет`). That's on for Thai (79% of missed short
-words recovered), Russian (85%) and Kazakh (79%), where it changes 0.5% of
-correct short English words or fewer. In the other languages it would change
-1–9% of correct English words, so it stays off; `LS_REREAD_ALL=1 swift run
-TypoCat --eval 5000` measures it.
+language (`lf ghbdtn` → `да привет`). In Thai, Russian and Kazakh a short word
+is reread unless it's among about the top 200 of its own language (79–85% of
+missed short words recovered); elsewhere only if it's rarer than about the top
+13,000 (35–56% recovered). Either way at most 0.04% of short English words, as
+used, get changed. Rereading into English stays off. `LS_KEEP=0.7
+LS_REREAD_ALL=1 swift run TypoCat --eval 5000` measures other settings.
+
+Thai is typed without spaces, so a whole phrase on the wrong layout used to
+come out wrong until Space. Now a run of 7 keys or more that can't be the start
+of an English word, and reads as whole Thai words, is fixed right away (95% of
+runs of 2–4 words, typically after 38% of the keys; `--eval-midword`).
+
+`Data/extra/<language>.txt` adds everyday words the subtitle lists lack (`ลาย`,
+`ภาษี`, `สลิป`, `скриншот`), one per line, ranked like the list's 5000th word.
 
 Adding a language: add its code to `Language.bundled` and to the list in
-`scripts/build-app.sh`, run `--eval`, and add a few words to `SelfTest`.
+`scripts/fetch-word-lists.sh`, run `--eval`, and add a few words to `SelfTest`.
 Layouts that are input methods (Japanese, Chinese, Korean) have no key map and
 aren't supported.
 
@@ -79,7 +111,13 @@ System Settings → Privacy & Security → Accessibility and add it again.
 
 ## Install on another Mac
 
-Download `TypoCat.dmg` from the [latest release](https://github.com/hx-natthawat/typocat/releases/latest),
+With [Homebrew](https://brew.sh):
+
+```bash
+brew install --cask hx-natthawat/typocat/typocat
+```
+
+Or download `TypoCat.dmg` from the [latest release](https://github.com/hx-natthawat/typocat/releases/latest),
 or build it yourself:
 
 ```bash
@@ -105,7 +143,9 @@ the Release workflow builds the disk image and attaches it.
 - **Menu options:**
   - **Disable in \<App\>:** turns TypoCat off for the front app.
   - **Match layout to each app:** switching to an app selects the language you usually type there. This starts after 20 words and needs a 75% majority.
+  - **Match layout to each website:** off by default. The same, per website, in Safari, Chrome, Arc, Edge, Brave and other browsers. TypoCat reads the page's host name through Accessibility once a second while a browser is in front.
   - **Fix typos (beta):** off by default. See below.
+  - **Learn words I convert with ⌃⌥Space:** off by default. A word you convert by hand counts as a word in its language from then on, so it gets fixed by itself next time. Undoing a fix forgets the word; turning the option off deletes them all.
   - **Open at login.**
 - **Never converted:** tech names (`git`, `api`, `json`…). In terminals and code editors, shell commands are not converted either.
 - **Field check:** before rewriting, TypoCat reads the focused field through the Accessibility API and checks that it ends with the typed word. If it doesn't (autocomplete, a moved cursor), the fix is skipped. Apps that don't expose their text fall back to the keystroke buffer.
@@ -148,12 +188,14 @@ Code layout:
 | `Sources/TypoCat` | The app: event tap, input sources, Accessibility checks, menu, settings |
 
 Local data lives in `~/Library/Application Support/TypoCat/`:
-`ignoredWords.json` (words you undid) and `appLanguageCounts.json`.
+`ignoredWords.json` (words you undid), `appLanguageCounts.json` (per app, and
+per website host if you turn that on), and `learnedWords.json` if you turn
+learning on.
 
 ## Footprint
 
 A native Swift app (no Electron, no web view): a 0.5 MB binary plus about
-17 MB of compiled word lists. The build compiles each list into a sorted,
+27 MB of compiled word lists for 26 languages. The build compiles each list into a sorted,
 binary-searchable file (`.tcdict`), and the app maps the files for enabled
 layouts straight from disk. Nothing is parsed at launch, and mapped pages don't
 count toward the app's memory. Measured with
@@ -162,7 +204,7 @@ count toward the app's memory. Measured with
 | Layouts enabled | Load time | Word lists in memory | Running app (Activity Monitor) |
 |---|---|---|---|
 | English + Thai | under 0.01 s | under 1 MB | 14 MB |
-| All 16 languages | under 0.01 s | under 1 MB | not measured; the lists add under 1 MB |
+| All 26 languages | under 0.01 s | under 1 MB | not measured; the lists add under 1 MB |
 
 Before compiled lists, the app parsed text at launch: 0.6–0.9 s and 19–21 MB for
 English + Thai, 2.2–2.7 s and 37–53 MB for all 16. `swift run` still reads the
@@ -178,14 +220,15 @@ fields, TypoCat falls back to its keystroke buffer.
 Everything runs on your Mac. TypoCat keeps only the current word in memory.
 It does not log or send keystrokes, and it pauses in secure input fields such as
 password boxes. The only network request is Check for Updates…, when you pick it.
+The two options that keep more (words you convert by hand, website host names)
+are off until you turn them on, and stay on this Mac.
 
 ## Roadmap
 
-- Settle ambiguous short words from context in the languages where rereading is still off (Serbian, Macedonian, Greek).
-- Detect Thai mid-phrase, before a space is typed.
-- Learn the user's own vocabulary.
-- Remember the language per website in browsers.
-- Latin-to-Latin layouts (AZERTY, QWERTZ, Dvorak), where wrong-layout text still looks like letters.
+- Settle more ambiguous short words in phonetic layouts (Serbian `то`/`to`, Urdu `اس`/`as`).
+- Norwegian (its word list is published as `no`, its layout reports `nb`) and Portuguese (Portugal) layouts.
+- Mirror the setup window for Hebrew and Arabic.
+- Apple Developer ID signing, so updates keep Accessibility access.
 
 ## Contributing
 

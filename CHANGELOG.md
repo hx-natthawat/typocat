@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+### New
+- Latin layouts: French (AZERTY), German, Czech and Hungarian (QWERTZ), Spanish, Italian, Turkish, Swedish, Danish and Finnish. 98–100% of words typed on the wrong one are fixed.
+- Dvorak and Colemak next to QWERTY: a second layout for the same language gets its own entry (`DV`, `CO`) and shares the word list. About 96% fixed, no correct words changed.
+- Thai typed in one run is fixed before Space, once the run reads as whole Thai words and can't be the start of an English word.
+- The app is translated into Thai, Russian, Ukrainian, German, French, Spanish, Hebrew, Arabic, Greek and Turkish.
+- Install with Homebrew: `brew install --cask hx-natthawat/typocat/typocat`.
+- Opt-in, off by default, kept on this Mac only:
+  - Match layout to each website, in browsers.
+  - Learn words you convert with ⌃⌥Space, so they get fixed by themselves next time.
+
+### Better detection
+- Short words left alone are reread after a later fix in every language, not only Thai, Russian and Kazakh (35–56% of missed short words recovered elsewhere).
+- English typed on the Serbian layout: 78.6% → 82.1% fixed, because English quoted in Serbian subtitles no longer counts as Serbian.
+- Everyday words missing from the word lists are added (`ลาย`, `ภาษี`, `สลิป`, `скриншот`, `дедлайн`).
+- A known word is no longer changed into one that swaps letters for punctuation (`min` → `;in`, `уж` → `e;`). Correct text changed drops in most languages, for example Hindi 0.11% → 0.03% and Persian 0.07% → 0.00%.
+- Digits count inside known words (`1er`, `2nd`).
+
+### Fixed
+- The setup window fits its content in every language instead of cutting off long lines.
+- A unit test that had failed CI since 0.2.0 (it expected the rarest word in its list to score above the minimum).
+
 ## 0.2.0 (2026-10-19)
 
 First release with a download: open `TypoCat.dmg` and drag TypoCat into Applications.

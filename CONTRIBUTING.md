@@ -48,8 +48,28 @@ more words but changes more correct text needs a strong argument.
 3. If it's written without spaces, add it to `Language.writesWithoutSpaces`.
 4. Add a few everyday words to the cases in `Sources/TypoCat/SelfTest.swift`.
 5. Run `--selftest` and `--eval 5000`, and add its row to the README table.
+   `LS_LANGS=xx --eval 5000` measures it before it's bundled, and
+   `LS_SHOW_CHANGED=1` lists the correct words it changes.
+6. Everyday words the list lacks go in `Data/extra/<code>.txt`, one per line.
+
+Latin layouts work the same way; only words that use moved keys are measured.
+A second layout for a language (Dvorak) needs nothing: it becomes `en+dvorak`
+when its letters differ from the first one's.
 
 Input methods (Japanese, Chinese, Korean) have no key map and can't work this way.
+
+## Translations
+
+User-facing text is English in the source, and `Resources/<code>.lproj/Localizable.strings`
+maps it to each language (keys are the English text; `%@` and `%1$@` are filled in). To add a
+language, copy an existing file, translate the right-hand sides, then check the setup window:
+
+```bash
+./scripts/build-app.sh
+build/TypoCat.app/Contents/MacOS/TypoCat --render-setup /tmp/setup.png -AppleLanguages '(xx)'
+```
+
+Thai fixed before Space has its own measure: `--eval-midword 3000`.
 
 ## Style
 

@@ -13,6 +13,9 @@ permissions:
 jobs:
   release:
     runs-on: macos-15
+    env:
+      # A token that can push to hx-natthawat/homebrew-typocat. Without it the cask is bumped by hand.
+      TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -54,3 +57,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "$GITHUB_REF_NAME" build/TypoCat.dmg --title "TypoCat ${GITHUB_REF_NAME#v}" --notes-file notes.md
+
+      # Pins the new version and the DMG's checksum in the Homebrew cask.
+      - name: Update Homebrew cask
+        if: github.ref_type == 'tag' && env.TAP_TOKEN != ''
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          sha=$(shasum -a 256 build/TypoCat.dmg | cut -d' ' -f1)
+          git clone -q "https://x-access-token:${TAP_TOKEN}@github.com/hx-natthawat/homebrew-typocat.git" tap
+          sed -i '' -e "s/^  version \".*\"/  version \"$version\"/" -e "s/^  sha256 \".*\"/  sha256 \"$sha\"/" tap/Casks/typocat.rb
+          cd tap
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -qam "TypoCat $version"
+          git push -q
