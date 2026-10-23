@@ -19,6 +19,7 @@
 "Word lists: FrequencyWords by Hermit Dave (github.com/hermitdave/FrequencyWords), licensed CC BY-SA 4.0, built from OpenSubtitles." = "Λίστες λέξεων: FrequencyWords από τον Hermit Dave (github.com/hermitdave/FrequencyWords), με άδεια CC BY-SA 4.0, από το OpenSubtitles.";
 "Forget 1 learned word" = "Ξέχασε 1 λέξη που έμαθε";
 "Forget %d learned words" = "Ξέχασε %d λέξεις που έμαθε";
+"Reset caution from undone fixes" = "Επαναφορά προσοχής από αναιρεμένες διορθώσεις";
 "TypoCat %@ is available" = "Το TypoCat %@ είναι διαθέσιμο";
 "You have %@. Download the new TypoCat.dmg and drag it into Applications. Afterwards, turn TypoCat off and on again in Accessibility settings if it stops fixing words." = "Έχετε την έκδοση %@. Κατεβάστε το νέο TypoCat.dmg και σύρετε το TypoCat στις Εφαρμογές. Αν μετά το TypoCat σταματήσει να διορθώνει λέξεις, απενεργοποιήστε το και ενεργοποιήστε το ξανά στις ρυθμίσεις Προσβασιμότητας.";
 "Download" = "Λήψη";

@@ -6,8 +6,10 @@ extension Detector {
     /// Conservative on purpose: only lowercase words of `typoMinimumLength` letters or more
     /// that are absent from the word list, and only when one candidate clearly wins.
     /// The app also asks the system spell checker before applying it.
+    /// `caution` (from `FixFeedback`) raises the commonness the fix must have, twice over: 0.3 more
+    /// leaves only about the most common words.
     public func typoFix(_ typed: String, in language: Language, ignoring ignored: Set<String> = [],
-                        category: AppCategory = .general) -> String? {
+                        category: AppCategory = .general, caution: Double = 0) -> String? {
         guard !language.writesWithoutSpaces, category != .terminal, category != .code,
               !Self.isIgnored(typed, in: ignored), !ProtectedWords.contains(typed, in: category),
               let dict = dictionary(for: language) else { return nil }
@@ -31,9 +33,24 @@ extension Detector {
                 runnerUp = n
             }
         }
-        guard let best, dict.commonness(of: best.word) >= typoMinimumCommonness,
+        guard let best, dict.commonness(of: best.word) >= typoMinimumCommonness + 2 * caution,
               Double(best.count) >= Double(runnerUp) * typoDominance else { return nil }
         return String(scalars[..<start]) + best.word + String(scalars[scalars.index(after: end)...])
+    }
+
+    /// Whether `b` is one deletion, transposition, substitution or insertion away from `a`.
+    public static func isOneEdit(_ a: String, _ b: String) -> Bool {
+        let a = Array(a), b = Array(b)
+        guard a != b, abs(a.count - b.count) <= 1 else { return false }
+        let prefix = zip(a, b).prefix { $0 == $1 }.count
+        let restA = a[prefix...], restB = b[prefix...]
+        if a.count == b.count {
+            // One substitution, or two neighbours swapped.
+            if restA.dropFirst() == restB.dropFirst() { return true }
+            return restA.count >= 2 && restA.first == restB.dropFirst().first && restB.first == restA.dropFirst().first
+                && restA.dropFirst(2) == restB.dropFirst(2)
+        }
+        return a.count > b.count ? restA.dropFirst() == restB : restA == restB.dropFirst()
     }
 
     /// Every string one deletion, transposition, substitution or insertion away.

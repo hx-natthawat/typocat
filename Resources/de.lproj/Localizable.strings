@@ -19,6 +19,7 @@
 "Word lists: FrequencyWords by Hermit Dave (github.com/hermitdave/FrequencyWords), licensed CC BY-SA 4.0, built from OpenSubtitles." = "Wortlisten: FrequencyWords von Hermit Dave (github.com/hermitdave/FrequencyWords), lizenziert unter CC BY-SA 4.0, erstellt aus OpenSubtitles.";
 "Forget 1 learned word" = "1 gelerntes Wort vergessen";
 "Forget %d learned words" = "%d gelernte Wörter vergessen";
+"Reset caution from undone fixes" = "Vorsicht nach rückgängig gemachten Korrekturen zurücksetzen";
 "TypoCat %@ is available" = "TypoCat %@ ist verfügbar";
 "You have %@. Download the new TypoCat.dmg and drag it into Applications. Afterwards, turn TypoCat off and on again in Accessibility settings if it stops fixing words." = "Du hast %@. Lade die neue TypoCat.dmg und ziehe TypoCat in „Programme“. Wenn TypoCat danach keine Wörter mehr korrigiert, schalte es in den Bedienungshilfen aus und wieder ein.";
 "Download" = "Laden";

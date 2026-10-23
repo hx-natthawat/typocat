@@ -146,6 +146,7 @@ the Release workflow builds the disk image and attaches it.
 
 - **Fixing a word:** type it on the wrong layout and press Space, Return or Tab. The word is retyped on the right layout, and the keyboard switches to that layout.
 - **Undo:** press Backspace or ⌘Z right after a fix. TypoCat won't fix that word again.
+- **Learning from wrong fixes:** noticing a wrong fix later also counts as undoing it. Within 30 seconds, select the word and convert it back with the shortcut, or delete it and type it again on the other layout. Either way TypoCat adds the word to Exceptions. If fixes from one language to another keep being undone in an app (two or more), TypoCat needs to be more sure before making them there. Fixes you keep for three words win that back slowly, ten per undo. Reset caution from undone fixes in the menu puts every app back to normal.
 - **Convert now:** press ⌃⌥Space to convert the current word whatever the detector thinks. With nothing typed yet, it converts the selected text instead: a whole sentence or paragraph typed on the wrong layout. The shortcut can be Shift pressed twice instead, or both (menu: Convert shortcut).
 - **Exceptions…:** the words TypoCat never changes and the apps it's off in. Undoing a fix adds its word; names, brands and slang can be added by hand.
 - **Show each fix:** the menu bar icon flashes on each fix. With VoiceOver on, the fix is also read aloud. The menu shows how many words were fixed into each language (numbers only).
@@ -154,7 +155,7 @@ the Release workflow builds the disk image and attaches it.
   - **Match layout to each app:** switching to an app selects the language you usually type there. This starts after 20 words and needs a 75% majority.
   - **Match layout to each website:** off by default. The same, per website, in Safari, Chrome, Arc, Edge, Brave and other browsers. TypoCat reads the page's host name through Accessibility once a second while a browser is in front.
   - **Fix typos (beta):** off by default. See below.
-  - **Learn words I convert by hand:** off by default. A word you convert by hand counts as a word in its language from then on, so it gets fixed by itself next time. Undoing a fix forgets the word; turning the option off deletes them all.
+  - **Learn words I convert by hand:** off by default. A word you convert by hand counts as a word in its language from then on, so it gets fixed by itself next time. If you undo a typo fix, delete the word and type a different word one letter away (`fro`: not "for" but "from"), TypoCat uses your word for that typo from then on. Undoing a fix forgets what was learned; turning the option off deletes it all.
   - **Open at login.**
 - **Never converted:** tech names (`git`, `api`, `json`…). In terminals and code editors, shell commands are not converted either.
 - **Field check:** before rewriting, TypoCat reads the focused field through the Accessibility API and checks that it ends with the typed word. If it doesn't (autocomplete, a moved cursor), the fix is skipped. Apps that don't expose their text fall back to the keystroke buffer.
@@ -198,8 +199,9 @@ Code layout:
 
 Local data lives in `~/Library/Application Support/TypoCat/`:
 `ignoredWords.json` (words you undid), `appLanguageCounts.json` (per app, and
-per website host if you turn that on), and `learnedWords.json` if you turn
-learning on.
+per website host if you turn that on), `fixFeedback.json` (per app and language
+pair, how often fixes were undone: numbers only, no words), and
+`learnedWords.json` and `learnedFixes.json` if you turn learning on.
 
 ## Footprint
 

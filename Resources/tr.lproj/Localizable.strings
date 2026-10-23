@@ -19,6 +19,7 @@
 "Word lists: FrequencyWords by Hermit Dave (github.com/hermitdave/FrequencyWords), licensed CC BY-SA 4.0, built from OpenSubtitles." = "Sözcük listeleri: Hermit Dave’in FrequencyWords projesi (github.com/hermitdave/FrequencyWords), CC BY-SA 4.0 lisanslı, OpenSubtitles’tan derlendi.";
 "Forget 1 learned word" = "Öğrenilen 1 sözcüğü unut";
 "Forget %d learned words" = "Öğrenilen %d sözcüğü unut";
+"Reset caution from undone fixes" = "Geri alınan düzeltmelerden gelen temkini sıfırla";
 "TypoCat %@ is available" = "TypoCat %@ yayınlandı";
 "You have %@. Download the new TypoCat.dmg and drag it into Applications. Afterwards, turn TypoCat off and on again in Accessibility settings if it stops fixing words." = "Sizdeki sürüm %@. Yeni TypoCat.dmg’yi indirip TypoCat’i Uygulamalar klasörüne sürükleyin. Sonrasında TypoCat sözcükleri düzeltmeyi bırakırsa, Erişilebilirlik ayarlarında kapatıp yeniden açın.";
 "Download" = "İndir";

@@ -21,6 +21,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var learnItem = NSMenuItem(title: L("Learn words I convert by hand"), action: #selector(toggleLearnWords),
                                        keyEquivalent: "")
     private var forgetItem = NSMenuItem(title: "", action: #selector(forgetLearnedWords), keyEquivalent: "")
+    /// Shown once fixes got more careful somewhere because they kept being undone.
+    private var resetCautionItem = NSMenuItem(title: L("Reset caution from undone fixes"), action: #selector(resetCaution),
+                                              keyEquivalent: "")
     private var showFixesItem = NSMenuItem(title: L("Show each fix"), action: #selector(toggleShowFixes), keyEquivalent: "")
     private var countItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     private var hintItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
@@ -51,13 +54,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // Spelling fixes stay in their language; count words that changed layout.
             if c.from != c.to { self.store.countFix(into: c.to) }
             self.refreshCount()
+            self.refreshCautionItem()
             self.showFix(c)
         }
         interceptor.onUndo = { [weak self] c in
             if c.from != c.to { self?.store.countFix(into: c.to, by: -1) }
             self?.refreshCount()
             self?.refreshExceptions()
+            self?.refreshCautionItem()
+            self?.refreshLearnItems()
         }
+        interceptor.onLearnedFix = { [weak self] in self?.refreshLearnItems() }
         interceptor.onNothingToConvert = { NSSound.beep() }
         interceptor.onManualConversion = { [weak self] c in
             guard let self, self.store.learn(c.replacement, in: c.to) else { return }
@@ -172,7 +179,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         typoItem.state = store.fixTypos ? .on : .off
         learnItem.target = self
         forgetItem.target = self
+        resetCautionItem.target = self
         refreshLearnItems()
+        refreshCautionItem()
         loginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
         menu.addItem(enabledItem)
         menu.addItem(excludeItem)
@@ -181,6 +190,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(typoItem)
         menu.addItem(learnItem)
         menu.addItem(forgetItem)
+        menu.addItem(resetCautionItem)
         menu.addItem(loginItem)
         menu.addItem(permissionItem)
         showFixesItem.target = self
@@ -340,6 +350,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         interceptor.detector.learnedWords = [:]
         refreshLearnItems()
     }
+
+    @objc private func resetCaution() {
+        store.resetFeedback()
+        refreshCautionItem()
+    }
+
+    private func refreshCautionItem() { resetCautionItem.isHidden = !store.hasFeedback }
 
     private func refreshLearnItems() {
         learnItem.state = store.learnWords ? .on : .off

@@ -9,6 +9,9 @@
 - Exceptions…: see and edit the words TypoCat never changes and the apps it's off in; add names and brands by hand.
 - Each fix flashes the menu bar icon (Show each fix), and VoiceOver reads it aloud.
 - The menu shows how many words were fixed into each language. Counts only.
+- Learns from wrong fixes noticed late: selecting a fixed word and converting it back, or deleting it and typing it again on the other layout, counts as undoing it.
+- Apps where fixes keep being undone get more careful fixes, per language pair; kept fixes slowly win that back. Reset caution from undone fixes in the menu.
+- With learning on: undo a typo fix and type the word you meant (`fro` → from, not for), and that's the fix next time.
 
 ### Better detection
 - A known word is no longer changed into one with a capital inside (`쟤가` → `wOrk`).

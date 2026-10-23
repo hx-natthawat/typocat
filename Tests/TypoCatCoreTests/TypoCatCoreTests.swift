@@ -304,4 +304,129 @@ final class TypoCatCoreTests: XCTestCase {
         profile.reassign(from: .english, to: .thai, in: "app")
         XCTAssertEqual(profile.counts["app"]?["th"], 1)
     }
+
+    // MARK: - Learning from undone and kept fixes
+
+    func testCautionRaisesTheBar() {
+        let d = detector(), keys = strokes([5, 3, 4]) // r o w
+        XCTAssertEqual(d.decide(strokes: keys, typed: "кщц", current: Self.ru, layouts: layouts())?.replacement, "row")
+        let enough = d.score("row", as: .english) - d.acceptThreshold + 0.01
+        XCTAssertNil(d.decide(strokes: keys, typed: "кщц", current: Self.ru, layouts: layouts(), caution: [.english: enough]))
+        // Caution into another language changes nothing.
+        XCTAssertNotNil(d.decide(strokes: keys, typed: "кщц", current: Self.ru, layouts: layouts(), caution: [Self.ru: 0.3]))
+    }
+
+    func testTypoCautionNeedsMoreCommonWord() {
+        let d = detector()
+        XCTAssertEqual(d.typoFix("wrold", in: .english), "world")
+        XCTAssertNil(d.typoFix("wrold", in: .english, caution: 0.5))
+    }
+
+    func testFeedbackGetsCarefulAfterRepeatedUndos() {
+        var f = FixFeedback()
+        f.recordUndo(in: "mail", from: Self.ru, to: .english)
+        XCTAssertEqual(f.caution(in: "mail", from: Self.ru, to: .english), 0) // one undo: the exception is enough
+        f.recordUndo(in: "mail", from: Self.ru, to: .english)
+        XCTAssertEqual(f.caution(in: "mail", from: Self.ru, to: .english), 0.1, accuracy: 1e-9)
+        for _ in 0..<5 { f.recordUndo(in: "mail", from: Self.ru, to: .english) }
+        XCTAssertEqual(f.caution(in: "mail", from: Self.ru, to: .english), 0.3, accuracy: 1e-9)
+        XCTAssertEqual(f.caution(in: "notes", from: Self.ru, to: .english), 0)
+        XCTAssertEqual(f.caution(in: "mail", from: .english, to: Self.ru), 0)
+        XCTAssertEqual(f.caution(in: "mail", from: Self.ru, into: [.english, Self.ru]), [.english: 0.3])
+        // Kept fixes forgive: ten per undo.
+        var g = FixFeedback()
+        for _ in 0..<2 { g.recordUndo(in: nil, from: Self.ru, to: .english) }
+        for _ in 0..<10 { g.recordKept(in: nil, from: Self.ru, to: .english) }
+        XCTAssertEqual(g.caution(in: nil, from: Self.ru, to: .english), 0)
+        for _ in 0..<10 { g.recordKept(in: nil, from: Self.ru, to: .english) }
+        XCTAssertTrue(g.strikes.isEmpty)
+        let decoded = try? JSONDecoder().decode(FixFeedback.self, from: JSONEncoder().encode(f))
+        XCTAssertEqual(decoded, f)
+    }
+
+    func ruFix() -> Correction { Correction(original: "ghbdtn", replacement: "привет", from: .english, to: Self.ru) }
+
+    func testConvertingAFixBackFindsIt() {
+        var r = RecentFixes()
+        r.add(ruFix(), word: "ghbdtn", delimited: true, at: 100)
+        XCTAssertEqual(r.converted(" привет ", at: 110)?.word, "ghbdtn")
+        XCTAssertNil(r.converted("привет", at: 131))
+        XCTAssertNil(r.converted("пока", at: 110))
+        var multi = RecentFixes()
+        multi.add(Correction(original: "z ghbdtn", replacement: "я привет", from: .english, to: Self.ru),
+                  word: "ghbdtn", delimited: true, at: 100)
+        XCTAssertNotNil(multi.converted("привет", at: 101))
+        XCTAssertNotNil(multi.converted("я привет", at: 101))
+    }
+
+    func testErasingAndRetypingAFixFindsIt() {
+        var r = RecentFixes()
+        r.add(ruFix(), word: "ghbdtn", delimited: true, at: 100)
+        r.typed(scalars: 2)
+        for _ in 0..<8 { r.deleted() } // the two letters, then "привет" but not its space
+        XCTAssertNil(r.retyped("ghbdtn", in: .english, at: 105))
+        r.deleted()
+        for _ in 0..<6 { r.typed(scalars: 1) } // typing it again keeps it erased
+        XCTAssertEqual(r.retyped("ghbdtn", in: .english, at: 105)?.word, "ghbdtn")
+        XCTAssertNil(r.retyped("ghbdtn", in: Self.ru, at: 105))
+        XCTAssertNil(r.retyped("ghbdtn", in: .english, at: 131))
+    }
+
+    func testCaretMovedStopsRetypeTracking() {
+        var r = RecentFixes()
+        r.add(ruFix(), word: "ghbdtn", delimited: true, at: 100)
+        r.lostCaret()
+        for _ in 0..<7 { r.deleted() }
+        XCTAssertNil(r.retyped("ghbdtn", in: .english, at: 101))
+        XCTAssertNotNil(r.converted("привет", at: 101)) // a selection still works
+        var w = RecentFixes()
+        w.add(ruFix(), word: "ghbdtn", delimited: true, at: 100)
+        w.deletedWord() // ⌥⌫ right after it
+        w.lostCaret()
+        XCTAssertNotNil(w.retyped("ghbdtn", in: .english, at: 101))
+    }
+
+    func testFixCountsAsKeptAfterThreeWords() {
+        var r = RecentFixes()
+        r.add(ruFix(), word: "ghbdtn", delimited: true, at: 100)
+        XCTAssertTrue(r.finishedWord(at: 101).isEmpty)
+        XCTAssertTrue(r.finishedWord(at: 102).isEmpty)
+        XCTAssertEqual(r.finishedWord(at: 103).map(\.word), ["ghbdtn"])
+        XCTAssertTrue(r.finishedWord(at: 104).isEmpty) // only once
+        XCTAssertTrue(r.finishedWord(at: 200).isEmpty)
+        XCTAssertTrue(r.entries.isEmpty)
+        // A later fix stops erase counting for earlier ones, but they can still be kept.
+        var two = RecentFixes()
+        two.add(ruFix(), word: "ghbdtn", delimited: true, at: 100)
+        _ = two.finishedWord(at: 101)
+        two.add(Correction(original: "lheu", replacement: "друг", from: .english, to: Self.ru), word: "lheu", delimited: true, at: 102)
+        _ = two.finishedWord(at: 103)
+        XCTAssertEqual(two.finishedWord(at: 104).map(\.word), ["ghbdtn"])
+        for _ in 0..<20 { two.deleted() }
+        XCTAssertNil(two.retyped("ghbdtn", in: .english, at: 105))
+        XCTAssertNotNil(two.retyped("lheu", in: .english, at: 105))
+        var erased = RecentFixes()
+        erased.add(ruFix(), word: "ghbdtn", delimited: false, at: 100)
+        for _ in 0..<6 { erased.deleted() }
+        for t in 101...103 { XCTAssertTrue(erased.finishedWord(at: TimeInterval(t)).isEmpty) }
+    }
+
+    func testWordTypedAfterUndoingSpellingFix() {
+        var r = RecentFixes()
+        let fix = Correction(original: "fro", replacement: "for", from: .english, to: .english)
+        r.add(fix, word: "fro", delimited: true, at: 100, undone: true)
+        XCTAssertNil(r.replacedAfterUndo(with: "from", in: .english, at: 101)) // "fro " still there
+        for _ in 0..<4 { r.deleted() }
+        XCTAssertEqual(r.replacedAfterUndo(with: "from", in: .english, at: 102)?.word, "fro")
+        XCTAssertNil(r.converted("for", at: 102))
+        XCTAssertNil(r.retyped("fro", in: .english, at: 102))
+        XCTAssertTrue(Detector.isOneEdit("fro", "from"))
+        XCTAssertTrue(Detector.isOneEdit("teh", "the"))
+        XCTAssertTrue(Detector.isOneEdit("form", "from"))
+        XCTAssertTrue(Detector.isOneEdit("cat", "cut"))
+        XCTAssertTrue(Detector.isOneEdit("from", "fom"))
+        XCTAssertFalse(Detector.isOneEdit("fro", "fro"))
+        XCTAssertFalse(Detector.isOneEdit("fro", "frozen"))
+        XCTAssertFalse(Detector.isOneEdit("abcd", "badc"))
+    }
 }

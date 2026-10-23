@@ -3,7 +3,8 @@ import TypoCatCore
 
 /// Settings and learned state that survive restarts.
 /// Settings and fix counts live in UserDefaults; learned state lives in ~/Library/Application Support/TypoCat/
-/// (ignoredWords.json, appLanguageCounts.json, and learnedWords.json when learning is on).
+/// (ignoredWords.json, appLanguageCounts.json, fixFeedback.json, and learnedWords.json and
+/// learnedFixes.json when learning is on).
 final class UserStore {
     private let defaults = UserDefaults.standard
     private let excludedKey = "excludedApps"
@@ -17,6 +18,13 @@ final class UserStore {
     private let learnedURL: URL
     /// Words converted by hand with ⌃⌥Space, by language. Only kept while `learnWords` is on.
     private(set) var learnedWords: [Language: Set<String>] = [:]
+    private let learnedFixesURL: URL
+    /// Spelling fixes the user made after undoing one of ours ("fro" → "from", not "for"), by
+    /// language. Only kept while `learnWords` is on.
+    private(set) var learnedFixes: [Language: [String: String]] = [:]
+    private let feedbackURL: URL
+    private var feedbackDirty = false
+    private(set) var feedback = FixFeedback()
 
     /// Off by default: it saves words the user typed, which nothing else does.
     var learnWords: Bool {
@@ -27,7 +35,9 @@ final class UserStore {
         }
     }
 
-    var learnedWordCount: Int { learnedWords.values.reduce(0) { $0 + $1.count } }
+    var learnedWordCount: Int {
+        learnedWords.values.reduce(0) { $0 + $1.count } + learnedFixes.values.reduce(0) { $0 + $1.count }
+    }
 
     /// Off by default: a wrong autocorrection costs more than a missed one.
     var fixTypos: Bool {
@@ -74,9 +84,18 @@ final class UserStore {
         fileURL = support.appendingPathComponent("ignoredWords.json")
         appLanguagesURL = support.appendingPathComponent("appLanguageCounts.json")
         learnedURL = support.appendingPathComponent("learnedWords.json")
+        learnedFixesURL = support.appendingPathComponent("learnedFixes.json")
+        feedbackURL = support.appendingPathComponent("fixFeedback.json")
         if defaults.bool(forKey: "learnWords"), let data = try? Data(contentsOf: learnedURL),
            let words = try? JSONDecoder().decode([String: [String]].self, from: data) {
             learnedWords = Dictionary(uniqueKeysWithValues: words.map { (Language(rawValue: $0.key), Set($0.value)) })
+        }
+        if defaults.bool(forKey: "learnWords"), let data = try? Data(contentsOf: learnedFixesURL),
+           let fixes = try? JSONDecoder().decode([String: [String: String]].self, from: data) {
+            learnedFixes = Dictionary(uniqueKeysWithValues: fixes.map { (Language(rawValue: $0.key), $0.value) })
+        }
+        if let data = try? Data(contentsOf: feedbackURL), let saved = try? JSONDecoder().decode(FixFeedback.self, from: data) {
+            feedback = saved
         }
         if let data = try? Data(contentsOf: appLanguagesURL),
            let profile = try? JSONDecoder().decode(AppLanguageProfile.self, from: data) {
@@ -141,10 +160,77 @@ final class UserStore {
         return true
     }
 
-    /// Deletes the file too: turning learning off leaves nothing behind.
+    /// Deletes the files too: turning learning off leaves nothing behind.
     func forgetLearnedWords() {
         learnedWords = [:]
+        learnedFixes = [:]
         try? FileManager.default.removeItem(at: learnedURL)
+        try? FileManager.default.removeItem(at: learnedFixesURL)
+    }
+
+    /// Keeps the spelling fix the user chose for `typo`, if learning is on.
+    func learnFix(_ typo: String, to word: String, in language: Language) {
+        let typo = Detector.learnable(typo), word = Detector.learnable(word)
+        guard learnWords, !typo.isEmpty, !word.isEmpty, learnedFixes[language.base]?[typo] != word else { return }
+        learnedFixes[language.base, default: [:]][typo] = word
+        unignore(typo)
+        saveLearnedFixes()
+    }
+
+    func learnedFix(for typo: String, in language: Language) -> String? {
+        learnedFixes[language.base]?[Detector.learnable(typo)]
+    }
+
+    /// Undoing a learned spelling fix forgets it.
+    func forgetFix(for typo: String, in language: Language) {
+        guard learnedFixes[language.base]?.removeValue(forKey: Detector.learnable(typo)) != nil else { return }
+        saveLearnedFixes()
+    }
+
+    private func saveLearnedFixes() {
+        let snapshot = Dictionary(uniqueKeysWithValues: learnedFixes.map { ($0.key.rawValue, $0.value) })
+        let url = learnedFixesURL
+        DispatchQueue.global(qos: .utility).async {
+            try? JSONEncoder().encode(snapshot).write(to: url, options: .atomic)
+        }
+    }
+
+    // MARK: - Undone and kept fixes
+
+    func recordUndo(in bundleID: String?, from: Language, to: Language) {
+        feedback.recordUndo(in: bundleID, from: from, to: to)
+        saveFeedbackSoon()
+    }
+
+    func recordKept(in bundleID: String?, from: Language, to: Language) {
+        let before = feedback
+        feedback.recordKept(in: bundleID, from: from, to: to)
+        if feedback != before { saveFeedbackSoon() }
+    }
+
+    func caution(in bundleID: String?, from current: Language, into languages: some Sequence<Language>) -> [Language: Double] {
+        feedback.strikes.isEmpty ? [:] : feedback.caution(in: bundleID, from: current, into: languages)
+    }
+
+    /// Fixes everywhere go back to their usual confidence.
+    func resetFeedback() {
+        feedback.removeAll()
+        try? FileManager.default.removeItem(at: feedbackURL)
+    }
+
+    var hasFeedback: Bool { !feedback.strikes.isEmpty }
+
+    private func saveFeedbackSoon() {
+        guard !feedbackDirty else { return }
+        feedbackDirty = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [self] in
+            feedbackDirty = false
+            let snapshot = feedback
+            let url = feedbackURL
+            DispatchQueue.global(qos: .utility).async {
+                try? JSONEncoder().encode(snapshot).write(to: url, options: .atomic)
+            }
+        }
     }
 
     private func saveLearnedWords() {

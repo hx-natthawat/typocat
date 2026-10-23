@@ -19,6 +19,7 @@
 "Word lists: FrequencyWords by Hermit Dave (github.com/hermitdave/FrequencyWords), licensed CC BY-SA 4.0, built from OpenSubtitles." = "รายการคำ: FrequencyWords โดย Hermit Dave (github.com/hermitdave/FrequencyWords) สัญญาอนุญาต CC BY-SA 4.0 สร้างจาก OpenSubtitles";
 "Forget 1 learned word" = "ลืมคำที่จำไว้ 1 คำ";
 "Forget %d learned words" = "ลืมคำที่จำไว้ %d คำ";
+"Reset caution from undone fixes" = "รีเซ็ตความระมัดระวังจากการแก้ที่ถูกยกเลิก";
 "TypoCat %@ is available" = "TypoCat %@ พร้อมให้ดาวน์โหลดแล้ว";
 "You have %@. Download the new TypoCat.dmg and drag it into Applications. Afterwards, turn TypoCat off and on again in Accessibility settings if it stops fixing words." = "คุณใช้เวอร์ชัน %@ อยู่ ดาวน์โหลด TypoCat.dmg ใหม่แล้วลากไปไว้ในโฟลเดอร์ Applications หลังจากนั้น ถ้า TypoCat หยุดแก้คำ ให้ปิดแล้วเปิด TypoCat อีกครั้งในการตั้งค่าการช่วยการเข้าถึง";
 "Download" = "ดาวน์โหลด";

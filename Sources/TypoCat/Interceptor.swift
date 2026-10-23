@@ -12,12 +12,15 @@ final class Interceptor {
 
     var enabled = true
     var onCorrection: ((Correction) -> Void)?
-    /// A fix the user took back, with Backspace or ⌘Z.
+    /// A fix the user took back: Backspace or ⌘Z right after it, or later by converting it back
+    /// or erasing it and typing the word again.
     var onUndo: ((Correction) -> Void)?
     /// The shortcut found nothing to convert.
     var onNothingToConvert: (() -> Void)?
     /// A word converted by hand with ⌃⌥Space, for learning.
     var onManualConversion: ((Correction) -> Void)?
+    /// A spelling fix learned from what the user typed after undoing one of ours.
+    var onLearnedFix: (() -> Void)?
     /// Set from the app delegate when the front app changes.
     var frontBundleID: String? {
         didSet { category = AppCategory(bundleID: frontBundleID); reset() }
@@ -45,6 +48,8 @@ final class Interceptor {
     private var switchedDuringFence = false
     /// `delimiter` is nil for a fix made before Space (Thai typed in one run).
     private var lastCorrection: (correction: Correction, delimiter: CGEvent?, word: String)?
+    /// Fixes of the last moments, to learn from them when they're taken back late or kept.
+    private var recentFixes = RecentFixes()
     /// Words just typed and left alone, each followed by one space, oldest first.
     /// A later fix may reread them (short words like `z,` for ผม are ambiguous alone).
     private var recentWords: [(strokes: [KeyStroke], typed: String, language: Language)] = []
@@ -90,7 +95,10 @@ final class Interceptor {
         strokes.removeAll()
         recentWords.removeAll()
         lastCorrection = nil
+        recentFixes.lostCaret()
     }
+
+    private var now: TimeInterval { ProcessInfo.processInfo.systemUptime }
 
     // MARK: - Event handling (runs on the main run loop; keep it fast)
 
@@ -139,6 +147,7 @@ final class Interceptor {
             return nil
         }
         if flags.contains(.maskCommand) || flags.contains(.maskControl) || flags.contains(.maskAlternate) {
+            if keyCode == Key.delete && strokes.isEmpty && flags.contains(.maskAlternate) { recentFixes.deletedWord() }
             reset()
             return pass
         }
@@ -149,6 +158,7 @@ final class Interceptor {
                 undo(last.correction, delimiter: last.delimiter, word: last.word)
                 return nil
             }
+            recentFixes.deleted()
             // Deleting a space joins words; the earlier ones no longer match the field.
             if strokes.isEmpty { recentWords.removeAll() }
             lastCorrection = nil
@@ -161,14 +171,19 @@ final class Interceptor {
             guard let current = inputSources.currentLanguage(),
                   let typed = inputSources.layouts[current]?.render(strokes) else {
                 lastCorrection = nil
+                recentFixes.typed(scalars: 1)
                 return pass
             }
+            if !strokes.isEmpty { learnFromFeedback(typed: typed, in: current) }
+            recentFixes.typed(scalars: 1)
+            let caution = store.caution(in: frontBundleID, from: current, into: inputSources.layouts.keys)
             guard let wordFix = detector.decide(strokes: strokes, typed: typed, current: current,
                                                 layouts: inputSources.layouts, ignoring: store.ignoredWords,
-                                                category: category),
+                                                category: category, caution: caution),
                   let delimiter = event.copy() else {
                 lastCorrection = nil
-                if let typoFix = typoCorrection(typed, language: current), let delimiter = event.copy() {
+                if let typoFix = typoCorrection(typed, language: current, caution: caution[current] ?? 0),
+                   let delimiter = event.copy() {
                     recentWords.removeAll()
                     raiseFence()
                     DispatchQueue.main.async { self.apply(typoFix, delimiter: delimiter, word: typed) }
@@ -186,7 +201,7 @@ final class Interceptor {
                 }
                 return pass
             }
-            let correction = extendBackwards(wordFix)
+            let correction = extendBackwards(wordFix, caution: caution[wordFix.to] ?? 0)
             recentWords.removeAll()
             // Swallow the delimiter now; replay it after the rewrite so ordering holds.
             raiseFence()
@@ -207,11 +222,14 @@ final class Interceptor {
         }
         lastCorrection = nil
         strokes.append(stroke)
+        recentFixes.typed(scalars: 1)
         if strokes.count > 48 { reset(); return pass }
         // Thai is typed without spaces: fix a long run now rather than at the end of the phrase.
         if let typed = inputSources.layouts[current]?.render(strokes),
            let fix = detector.decideMidWord(strokes: strokes, typed: typed, current: current,
-                                            layouts: inputSources.layouts, ignoring: store.ignoredWords, category: category) {
+                                            layouts: inputSources.layouts, ignoring: store.ignoredWords, category: category,
+                                            caution: store.caution(in: frontBundleID, from: current,
+                                                                   into: inputSources.layouts.keys)) {
             strokes.removeAll()
             recentWords.removeAll()
             // This key goes through first; the rewrite waits for the field to show it.
@@ -256,6 +274,11 @@ final class Interceptor {
     private func convertSelection() {
         reset()
         SelectedText.read(post: { self.post($0) }) { text in
+            // Converting a fix of ours back is undoing it, just later.
+            if let text, let entry = self.recentFixes.converted(text, at: self.now) {
+                self.recentFixes.remove(entry)
+                self.learnFromUndo(entry.correction, word: entry.word)
+            }
             guard let text, let fix = self.detector.convertText(text, current: self.inputSources.currentLanguage(),
                                                                 layouts: self.inputSources.layouts) else {
                 self.onNothingToConvert?()
@@ -298,22 +321,30 @@ final class Interceptor {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.08, execute: work)
     }
 
-    /// A same-language spelling fix, when enabled and macOS agrees with it.
-    private func typoCorrection(_ typed: String, language: Language) -> Correction? {
-        guard store.fixTypos,
-              let fix = detector.typoFix(typed, in: language, ignoring: store.ignoredWords, category: category),
+    /// A same-language spelling fix, when enabled and macOS agrees with it, or one the user taught us.
+    private func typoCorrection(_ typed: String, language: Language, caution: Double) -> Correction? {
+        guard store.fixTypos else { return nil }
+        let core = Detector.learnable(typed)
+        if category != .terminal, category != .code, let learned = store.learnedFix(for: typed, in: language),
+           typed.contains(core) {
+            return Correction(original: typed, replacement: typed.replacingOccurrences(of: core, with: learned),
+                              from: language, to: language)
+        }
+        guard let fix = detector.typoFix(typed, in: language, ignoring: store.ignoredWords, category: category,
+                                         caution: caution),
               SystemSpelling.agrees(typo: typed, fix: fix, in: language) else { return nil }
         return Correction(original: typed, replacement: fix, from: language, to: language)
     }
 
     /// Folds immediately preceding words that read better in the fix's language into one rewrite.
-    private func extendBackwards(_ fix: Correction) -> Correction {
+    private func extendBackwards(_ fix: Correction, caution: Double) -> Correction {
         var original = fix.original, replacement = fix.replacement
         for word in recentWords.reversed() {
             guard word.language == fix.from,
                   let alt = detector.reread(strokes: word.strokes, typed: word.typed, current: word.language,
                                             as: fix.to, layouts: inputSources.layouts,
-                                            ignoring: store.ignoredWords, category: category) else { break }
+                                            ignoring: store.ignoredWords, category: category,
+                                            caution: caution) else { break }
             original = word.typed + " " + original
             replacement = alt + " " + replacement
         }
@@ -339,6 +370,7 @@ final class Interceptor {
         }
         record(correction.to)
         lastCorrection = (correction, delimiter, word)
+        recentFixes.add(correction, word: word, delimited: delimiter != nil, at: now)
         committingComposition(from: correction) {
             self.replace(scalarCount: correction.original.unicodeScalars.count, with: correction.replacement,
                          fenceAtEnd: delimiter == nil)
@@ -350,11 +382,12 @@ final class Interceptor {
 
     private func undo(_ correction: Correction, delimiter: CGEvent?, word: String) {
         lastCorrection = nil
-        onUndo?(correction)
-        store.ignore(word)
-        if store.unlearn(correction.replacement, in: correction.to) { detector.learnedWords = store.learnedWords }
-        store.correctLanguage(from: correction.to, to: correction.from, in: frontBundleID)
-        if let siteKey { store.correctLanguage(from: correction.to, to: correction.from, in: siteKey) }
+        if let entry = recentFixes.entries.last(where: { $0.correction == correction }) { recentFixes.remove(entry) }
+        learnFromUndo(correction, word: word)
+        // Watch what the user types instead of a spelling fix: maybe the word they meant.
+        if correction.from == correction.to {
+            recentFixes.add(correction, word: word, delimited: delimiter != nil, at: now, undone: true)
+        }
         DispatchQueue.main.async {
             // The field should end with our replacement plus the replayed delimiter, if any.
             let trailing = delimiter == nil ? 0 : 1
@@ -368,6 +401,40 @@ final class Interceptor {
                          fenceAtEnd: delimiter == nil)
             self.select(correction.from)
             if let delimiter { self.post(delimiter, last: true) }
+        }
+    }
+
+    /// A fix the user took back, right away or later: leave its word alone from now on, and after
+    /// a few in this app and language pair, make such fixes more careful.
+    private func learnFromUndo(_ correction: Correction, word: String) {
+        onUndo?(correction)
+        store.ignore(word)
+        store.forgetFix(for: word, in: correction.to)
+        if store.unlearn(correction.replacement, in: correction.to) { detector.learnedWords = store.learnedWords }
+        store.correctLanguage(from: correction.to, to: correction.from, in: frontBundleID)
+        if let siteKey { store.correctLanguage(from: correction.to, to: correction.from, in: siteKey) }
+        store.recordUndo(in: frontBundleID, from: correction.from, to: correction.to)
+    }
+
+    /// Checked as each word is finished, before deciding on it.
+    private func learnFromFeedback(typed: String, in current: Language) {
+        let now = self.now
+        // Erased a fix and typed the word as it was, on the layout we switched away from.
+        if let entry = recentFixes.retyped(typed, in: current, at: now) {
+            recentFixes.remove(entry)
+            learnFromUndo(entry.correction, word: entry.word)
+        }
+        // Undid a spelling fix, erased the typo and typed another word near it: that's the one they meant.
+        if let entry = recentFixes.replacedAfterUndo(with: typed, in: current, at: now) {
+            recentFixes.remove(entry)
+            let typo = Detector.learnable(entry.word), meant = Detector.learnable(typed)
+            if Detector.isOneEdit(typo, meant), detector.score(meant, as: current) > 0 {
+                store.learnFix(typo, to: meant, in: current)
+                onLearnedFix?()
+            }
+        }
+        for kept in recentFixes.finishedWord(at: now) {
+            store.recordKept(in: frontBundleID, from: kept.correction.from, to: kept.correction.to)
         }
     }
 

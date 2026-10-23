@@ -100,9 +100,12 @@ public final class Detector: @unchecked Sendable {
 
     /// - Parameter force: the user explicitly asked to convert; take the best
     ///   alternative even when neither rendering is a known word.
+    /// - Parameter caution: extra confidence a fix into each language needs, where such fixes keep
+    ///   being undone (`FixFeedback`).
     public func decide(strokes: [KeyStroke], typed: String, current: Language,
                        layouts: [Language: LayoutMap], ignoring ignored: Set<String> = [],
-                       category: AppCategory = .general, force: Bool = false) -> Correction? {
+                       category: AppCategory = .general, force: Bool = false,
+                       caution: [Language: Double] = [:]) -> Correction? {
         guard force || strokes.count >= minimumStrokes, !Self.isIgnored(typed, in: ignored) else { return nil }
         if !force && ProtectedWords.contains(typed, in: category) { return nil }
         let typedScore = score(typed, as: current)
@@ -110,9 +113,9 @@ public final class Detector: @unchecked Sendable {
         let punctuated = Self.hasUnusualPunctuation(typed) || (Self.hasUnpairedQuote(typed)
             && dictionary(for: current)?.count(of: typed.trimmingCharacters(in: Self.edgePunctuation)) ?? 0 == 0)
         /// Beyond the reject threshold only a clearly more common alternative can win.
-        func beats(_ altScore: Double, typed typedScore: Double) -> Bool {
-            let required = typedScore > rejectThreshold ? typedScore + dominanceMargin : 0
-            return altScore >= acceptThreshold && altScore > typedScore && altScore >= required
+        func beats(_ altScore: Double, typed typedScore: Double, caution: Double) -> Bool {
+            let required = typedScore > rejectThreshold ? typedScore + dominanceMargin + caution : 0
+            return altScore >= acceptThreshold + caution && altScore > typedScore && altScore >= required
         }
 
         var best: (Correction, Double, wins: Bool)?
@@ -134,7 +137,8 @@ public final class Detector: @unchecked Sendable {
             // other spaceless scripts, where nearly any run reads as words ('today' would change).
             let lettersInstead = !punctuated && !language.writesWithoutSpaces && s > typedScore && alt.unicodeScalars.allSatisfy(Self.isWordScalar)
                 && Self.letterCoreLength(alt) > Self.letterCoreLength(typed)
-            let wins = beats(s, typed: lettersOnly || lettersInstead ? typedScore * strippedPunctuationWeight : typedScore)
+            let wins = beats(s, typed: lettersOnly || lettersInstead ? typedScore * strippedPunctuationWeight : typedScore,
+                             caution: caution[language] ?? 0)
             if best == nil || s > best!.1 {
                 best = (Correction(original: typed, replacement: alt, from: current, to: language), s, wins)
             }
@@ -147,13 +151,14 @@ public final class Detector: @unchecked Sendable {
     /// spaces, or nil to keep waiting. Not in terminals and editors, where keys are commands.
     public func decideMidWord(strokes: [KeyStroke], typed: String, current: Language,
                               layouts: [Language: LayoutMap], ignoring ignored: Set<String> = [],
-                              category: AppCategory = .general) -> Correction? {
+                              category: AppCategory = .general, caution: [Language: Double] = [:]) -> Correction? {
         guard category != .terminal, category != .code, strokes.count >= midWordMinimumStrokes,
               !current.writesWithoutSpaces, !Self.isIgnored(typed, in: ignored), let dict = dictionary(for: current) else { return nil }
         // Anything that may still become a word here ("(hel", "don'") waits for Space.
         let word = typed.trimmingCharacters(in: Self.edgePunctuation)
         if word.isEmpty || dict.hasPrefix(word) || ProtectedWords.contains(typed, in: category) { return nil }
-        for (language, layout) in layouts where language.writesWithoutSpaces {
+        // Where these fixes keep being undone, wait for Space and the full check.
+        for (language, layout) in layouts where language.writesWithoutSpaces && caution[language] == nil {
             guard let alt = layout.render(strokes), let altDict = dictionary(for: language),
                   language.base != .thai || ThaiOrthography.isPlausible(alt),
                   alt.unicodeScalars.allSatisfy(Self.isWordScalar),
@@ -169,7 +174,7 @@ public final class Detector: @unchecked Sendable {
     /// be fixed too. Returns its `target` rendering, or nil to keep it.
     public func reread(strokes: [KeyStroke], typed: String, current: Language, as target: Language,
                        layouts: [Language: LayoutMap], ignoring ignored: Set<String> = [],
-                       category: AppCategory = .general) -> String? {
+                       category: AppCategory = .general, caution: Double = 0) -> String? {
         let keepScore = rereadKeepScore(target)
         guard target != current, keepScore != nil || strokes.count == 1, !Self.isIgnored(typed, in: ignored),
               !ProtectedWords.contains(typed, in: category),
@@ -178,7 +183,7 @@ public final class Detector: @unchecked Sendable {
         if keepScore == nil, altScore < singleKeyRereadScore { return nil }
         // Common words (นา, ทำ, go) stay: mixed-language text is normal. Rare ones (fu, z) may go.
         guard typedScore < keepScore ?? 0.8 else { return nil }
-        return altScore >= acceptThreshold && altScore > typedScore ? alt : nil
+        return altScore >= acceptThreshold + caution && altScore > typedScore ? alt : nil
     }
 
     /// Punctuation people put around words: "(word", "word,". Anything else at a word's edge
